@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: basalt-mvp
-Version: 1.5.1
-Summary: Basalt MVP v1.5: final Proof-to-PR demo MVP with repo verification, weak-proof detection, auto-fix patches, before/after proof, PR packs, Docker sandbox option, AST graph preview, and premium dashboard.
-Requires-Python: >=3.10
