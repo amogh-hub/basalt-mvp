@@ -1,0 +1,18 @@
+project:
+  name: demo-policy-violation
+  type: python
+commands:
+  lint: python -m compileall .
+  test: null
+proof:
+  require_tests: false
+  mutation_sample: true
+  security_scan: basic
+  dashboard: true
+  patch_plan: true
+policy:
+  block_secrets: true
+  block_destructive_migrations: true
+  require_human_approval_for_deploy: true
+sandbox:
+  mode: temp

@@ -1,0 +1,20 @@
+project:
+  name: demo-good
+  type: python
+commands:
+  lint: python -m compileall .
+  test: python -m unittest discover -s tests
+proof:
+  require_tests: true
+  mutation_sample: true
+  mutation_max: 4
+  security_scan: basic
+  dashboard: true
+  patch_plan: true
+  pr_pack: true
+policy:
+  block_secrets: true
+  block_destructive_migrations: true
+  require_human_approval_for_deploy: true
+sandbox:
+  mode: temp

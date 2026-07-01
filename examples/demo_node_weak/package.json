@@ -1,0 +1,8 @@
+{
+  "name": "demo-node-weak",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node tests/test.js && for f in tests/*.generated.test.js; do if [ -e \"$f\" ]; then node \"$f\"; fi; done",
+    "lint": "node --check app.js && node --check tests/test.js"
+  }
+}

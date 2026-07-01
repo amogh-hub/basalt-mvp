@@ -1,0 +1,13 @@
+[project]
+name = "basalt-mvp"
+version = "1.5.1"
+description = "Basalt MVP v1.5: final Proof-to-PR demo MVP with repo verification, weak-proof detection, auto-fix patches, before/after proof, PR packs, Docker sandbox option, AST graph preview, and premium dashboard."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+basalt = "basalt_proof.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
