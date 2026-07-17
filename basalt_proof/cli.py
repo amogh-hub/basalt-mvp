@@ -23,6 +23,8 @@ from .autofix import write_fix_bundle
 from .compare import write_before_after_artifacts
 from .config import infer_commands, infer_project_type, load_config, render_default_config
 from .context_compiler import compile_context_for_repo
+from .command_center import CommandCenterService
+from .command_center_server import serve_command_center
 from .dashboard import write_dashboard
 from .git_pr import write_pr_pack
 from .knowledge_graph import (
@@ -40,7 +42,7 @@ from .report import write_json_report, write_markdown_report
 from .runner import docker_status
 
 
-PRODUCT_NAME = "Basalt v2.2 Alpha Safe Fix Platform"
+PRODUCT_NAME = "Basalt v2.3 Alpha Command Center Platform"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -188,6 +190,28 @@ def build_parser() -> argparse.ArgumentParser:
     agent_revise.add_argument("--patch", type=Path, required=True)
     agent_revise.add_argument("--out", type=Path, default=None)
     agent_revise.add_argument("--json", action="store_true")
+
+    command_center = subparsers.add_parser(
+        "command-center",
+        help="Launch the local truth-compression web app for proof, graph, transactions, approvals, and evidence",
+    )
+    command_center.add_argument("repo", type=Path, nargs="?", default=Path("."), help="Repository path")
+    command_center.add_argument("--out", type=Path, default=None, help="Evidence directory. Defaults to <repo>/.basalt")
+    command_center.add_argument("--host", default="127.0.0.1", help="Bind host. Localhost is enforced by default.")
+    command_center.add_argument("--port", type=int, default=7337, help="Bind port")
+    command_center.add_argument("--no-open", action="store_true", help="Do not open the browser automatically")
+    command_center.add_argument(
+        "--allow-actions",
+        action="store_true",
+        help="Enable governed verify, approve, reject, apply, and rollback actions",
+    )
+    command_center.add_argument(
+        "--unsafe-bind",
+        action="store_true",
+        help="Allow a non-loopback bind. Use only inside a trusted network.",
+    )
+    command_center.add_argument("--snapshot", action="store_true", help="Print a Command Center JSON snapshot and exit")
+    command_center.add_argument("--json", action="store_true", help="Use JSON output for --snapshot")
 
     agent_rollback = agent_commands.add_parser("rollback", help="Roll back a previously verified transaction")
     agent_rollback.add_argument("repo", type=Path)
@@ -721,6 +745,45 @@ def run_agent(args: argparse.Namespace) -> int:
         return 1
 
 
+
+def run_command_center(args: argparse.Namespace) -> int:
+    repo = args.repo.resolve()
+    out_dir = args.out.resolve() if args.out else None
+    if args.snapshot:
+        try:
+            snapshot = CommandCenterService(repo, out_dir).overview()
+        except (OSError, ValueError) as exc:
+            print(f"Basalt Command Center error: {exc}", file=sys.stderr)
+            return 1
+        if args.json:
+            print(json.dumps(snapshot, indent=2))
+        else:
+            print("Basalt v2.3 Alpha Command Center Snapshot")
+            print(f"- project: {snapshot['project']['name']}")
+            print(f"- verdict: {snapshot['truth']['status']}")
+            print(f"- proof score: {snapshot['truth']['score']}/100")
+            print(f"- risk: {snapshot['truth']['risk']}")
+            print(f"- graph fresh: {snapshot['truth']['graph_fresh']}")
+            print(f"- symbols: {snapshot['graph']['symbols']}")
+            print(f"- edges: {snapshot['graph']['edges']}")
+            print(f"- pending approvals: {snapshot['approvals']['pending']}")
+            print(f"- transactions: {snapshot['transactions']['total']}")
+        return 0
+    try:
+        serve_command_center(
+            repo,
+            host=args.host,
+            port=args.port,
+            allow_actions=args.allow_actions,
+            unsafe_bind=args.unsafe_bind,
+            open_browser=not args.no_open,
+            out_dir=out_dir,
+        )
+        return 0
+    except (OSError, ValueError) as exc:
+        print(f"Basalt Command Center error: {exc}", file=sys.stderr)
+        return 1
+
 def run_doctor(args: argparse.Namespace) -> int:
     docker_ok, docker_reason = docker_status()
     info = {
@@ -778,6 +841,7 @@ def main(argv: list[str] | None = None) -> int:
         "impact": run_impact,
         "context": run_context,
         "agent": run_agent,
+        "command-center": run_command_center,
     }
     handler = handlers.get(args.command)
     if handler:

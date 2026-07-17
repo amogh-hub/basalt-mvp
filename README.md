@@ -1,33 +1,32 @@
-# Basalt v2.2 Alpha Safe Fix Platform
+# Basalt v2.3 Alpha Command Center Platform
 
-**Version:** `2.2.0a1`
+**Version:** `2.3.0a1`
 
-Basalt is a proof-first, prevention-first AI software platform. Phase 3 adds governed agent-assisted fixes: agents may propose patches, but Basalt owns policy review, human approval, atomic repository mutation, sandbox verification, proof comparison, and rollback.
+Basalt is a proof-first, prevention-first AI software platform. Phase 4 turns the verified CLI engine into a local **Command Center Web App** that compresses repository truth into a clear operating surface for proof, risk, knowledge, impact, agent transactions, approvals, and audit evidence.
 
 > **Core promise:** Verified software, not vibes.
 
-This is the official **Phase 3 — Agent-Assisted Safe Fixes** alpha. It is a governed single-fix transaction platform, not yet the full multi-agent AI Software Factory.
+This is the official **Phase 4 — Command Center Web App** alpha. It is a secure local control plane over the Phase 1 proof system, Phase 2 knowledge system, and Phase 3 governed safe-fix system. It is not yet the full multi-agent AI Software Factory.
 
-## What Phase 3 adds
+## What Phase 4 adds
 
-- Unified-diff patch ingestion and deterministic patch parsing
-- Safe patch preflight in an isolated repository copy
-- Path traversal, binary patch, protected path, lockfile, and stale-context rejection
-- Role-scoped capability permissions for implementation, frontend, backend, testing, database, DevOps, and documentation agents
-- Read-only Security and Code Review agent roles
-- Policy verdicts: `ALLOW`, `REQUIRE_HUMAN_APPROVAL`, and `BLOCK`
-- Risk flags and contract-lock requirements for auth, payment, database, contract, deployment, and high-impact changes
-- One-time human approval tokens whose plaintext is never persisted
-- Compare-and-swap repository state coordination
-- Atomic file backups and transaction manifests
-- Full before/after Basalt proof execution in temp or Docker sandboxes
-- Acceptance only when the resulting repository is `VERIFIED` without proof regression
-- Automatic rollback when proof fails or regresses
-- Manual rollback for verified transactions when repository state is still safe
-- Loop Governor with bounded attempts and repeated-patch/oscillation detection
-- Persistent run state, agent actions, policy evidence, verification deltas, and audit logs
-- Built-in deterministic proof-hardening proposals for weak Python boundary tests
-- All Phase 1 proof and Phase 2 graph/context capabilities
+- Local browser-based Command Center with no external web dependency
+- Truth-compression overview for intent, progress, proof, risk, decisions, and drift signals
+- Live proof score, verdict, check, mutation, finding, and sandbox views
+- Project Knowledge Graph metrics and freshness status
+- Interactive impact analysis for files, symbols, routes, and features
+- Interactive task-specific Context Compiler
+- Governed state transaction ledger and run detail explorer
+- Human approval center for pending agent proposals
+- Evidence vault for proof, graph, context, impact, dashboard, and agent-run artifacts
+- Read-only mode by default
+- Explicit `--allow-actions` mode for verify, approve, reject, apply, and rollback
+- Per-launch action token and same-origin request enforcement
+- Localhost-only binding by default with explicit unsafe-bind override
+- Strict browser security headers and no cross-origin API access
+- Stable versioned JSON API under `/api/v1`
+- Zero runtime Python dependencies beyond the standard library
+- Complete Phase 1–3 compatibility
 
 ## Install
 
@@ -38,102 +37,125 @@ python -m pip install --upgrade pip setuptools wheel
 python -m pip install -e .
 ```
 
-## Safe-fix workflow
+## Launch the Command Center
 
-### 1. Plan a governed patch
-
-An external coding agent may produce a normal unified diff. Basalt does not let that agent write directly to the repository.
+Read-only mode is the safe default:
 
 ```bash
-basalt agent plan /path/to/repo \
-  --task "Fix the login redirect regression" \
-  --role FrontendAgent \
-  --target src/LoginPage.tsx \
-  --patch /path/to/fix.patch
+basalt command-center /path/to/repo
 ```
 
-For a weak Python test discovered by Basalt mutation testing, omit `--patch` to request the built-in deterministic proof-hardening proposal:
+Basalt binds to `127.0.0.1:7337`, opens the browser, and exposes repository truth without allowing source-changing actions.
+
+Use a different local port:
 
 ```bash
-basalt agent plan /path/to/repo \
-  --task "Strengthen boundary proof" \
-  --role TestingAgent \
-  --target app.py
+basalt command-center /path/to/repo --port 7444
 ```
 
-Planning performs repository-state capture, graph refresh, context compilation, before-proof execution, patch preflight, impact analysis, Policy Kernel review, and deterministic Testing/Security/Code Review actions.
-
-### 2. Approve or reject
+Start without opening the browser:
 
 ```bash
-basalt agent approve /path/to/repo <run-id> \
-  --by "Amogh RB" \
-  --reason "Reviewed the patch, impact map, and policy evidence"
+basalt command-center /path/to/repo --no-open
 ```
 
-Basalt prints a one-time token. Only the token hash is stored.
+Enable governed actions:
 
 ```bash
-basalt agent reject /path/to/repo <run-id> \
-  --by "Amogh RB" \
-  --reason "The proposed behavior is not approved"
+basalt command-center /path/to/repo --allow-actions
 ```
 
-### 3. Apply and verify
+When actions are enabled, the browser receives a per-launch action token through the same-origin bootstrap endpoint. Mutating API calls require that token and are rejected when actions are disabled.
+
+Generate a machine-readable snapshot without starting the server:
 
 ```bash
-basalt agent apply /path/to/repo <run-id> \
-  --token <one-time-token> \
-  --sandbox auto
+basalt command-center /path/to/repo --snapshot --json
 ```
 
-Basalt applies the patch atomically, runs the complete proof system, compares before and after evidence, refreshes the Project Knowledge Graph, and commits the state transaction only when the result is verified. Failed or regressive patches are restored automatically.
+## Command Center surfaces
 
-### 4. Audit or roll back
+### Overview
 
-```bash
-basalt agent status /path/to/repo
-basalt agent status /path/to/repo <run-id>
+Shows:
 
-basalt agent rollback /path/to/repo <run-id> \
-  --by "Amogh RB" \
-  --reason "Reverting the accepted transaction"
+- current intent;
+- final proof verdict and score;
+- risk level;
+- graph freshness;
+- checks passed;
+- mutation strength;
+- pending human decisions;
+- roadmap progress;
+- recent state transactions.
+
+### Proof
+
+Shows configured checks, sandbox execution, findings, mutations, and proof timing. Raw evidence remains available but is not the default experience.
+
+### Knowledge
+
+Shows files, symbols, edges, mapped features, routes, schemas, tests, and languages. It also exposes interactive impact analysis and Context Compiler workflows.
+
+### Transactions
+
+Shows governed agent runs, policy status, risk, state transitions, proof deltas, and rollback state.
+
+### Approvals
+
+Shows only decisions that require human judgment. Approve and reject controls remain disabled unless the server starts with `--allow-actions`.
+
+### Evidence
+
+Shows whitelisted Basalt artifacts from `.basalt/` and allows safe inline preview. Arbitrary repository files and path traversal are not exposed.
+
+## Local API
+
+Read endpoints:
+
+```text
+GET  /api/v1/health
+GET  /api/v1/bootstrap
+GET  /api/v1/overview
+GET  /api/v1/proof
+GET  /api/v1/runs
+GET  /api/v1/runs/<run-id>
+GET  /api/v1/artifacts
+GET  /api/v1/artifacts/content/<artifact-id>
+GET  /api/v1/graph/query?term=<term>
 ```
 
-Manual rollback fails closed when unrelated repository changes make restoration unsafe.
+Analysis endpoints:
 
-### 5. Revise under the Loop Governor
-
-```bash
-basalt agent revise /path/to/repo <run-id> --patch /path/to/revised.patch
+```text
+POST /api/v1/impact
+POST /api/v1/context
 ```
 
-Revisions receive a fresh policy decision. Basalt stops repeated patch hashes, oscillation, and attempts beyond the configured limit.
+Governed action endpoints, disabled by default:
 
-## Policy configuration
-
-```yaml
-agents:
-  enabled: true
-  max_files: 8
-  max_changed_lines: 400
-  max_attempts: 3
-  require_human_approval_for_source: true
-  allow_test_only_auto_apply: false
-  protected_paths: .github/workflows,.env,infra,deploy
-  allowed_roles: ImplementationAgent,BuilderAgent,FrontendAgent,BackendAgent,DatabaseAgent,TestingAgent,DevOpsAgent,DocumentationAgent
+```text
+POST /api/v1/verify
+POST /api/v1/runs/<run-id>/approve
+POST /api/v1/runs/<run-id>/reject
+POST /api/v1/runs/<run-id>/apply
+POST /api/v1/runs/<run-id>/rollback
 ```
 
-Default safety behavior:
+Action requests require `X-Basalt-Action-Token` and same-origin validation.
 
-- source changes require explicit human approval;
-- test-only auto-apply is disabled;
-- review agents cannot author patches;
-- Testing Agent cannot edit source files;
-- Database Agent cannot perform destructive schema changes;
-- protected paths and secret introduction are blocked;
-- stale state cannot be applied;
-- no patch is accepted without full proof.
+## Security model
+
+- The server binds only to loopback by default.
+- Non-loopback binding requires `--unsafe-bind`.
+- Source-changing actions are disabled by default.
+- Action capability is scoped to a random per-launch token.
+- Cross-origin POST requests are rejected.
+- No permissive CORS headers are emitted.
+- Browser responses use CSP, frame denial, referrer denial, MIME sniffing protection, and no-store caching.
+- Request bodies are size-limited.
+- Artifact preview is restricted to a known evidence allowlist.
+- Existing Policy Kernel, approval, state-hash, proof, and rollback rules remain authoritative.
 
 ## Existing platform commands
 
@@ -145,60 +167,33 @@ basalt graph status .
 basalt graph query . login
 basalt impact . basalt_proof/agent_runtime.py
 basalt context . --task "Review transaction safety" --role CodeReviewAgent --target basalt_proof/agent_runtime.py
+basalt agent status .
 basalt verify .
 ```
 
-## Agent-run artifacts
-
-Each run is stored under:
-
-```text
-.basalt/agent-runs/<run-id>/
-```
-
-Typical evidence includes:
-
-```text
-run.json
-candidate.patch
-candidate-patch.md
-patch-proposal.json
-policy-decision.json
-policy-decision.md
-approval.json
-before-proof-report.json
-after-proof-report.json
-verification-delta.json
-verification-delta.md
-state-transaction.json
-audit-log.json
-backup/
-```
-
-The exact set depends on how far the transaction progressed.
-
 ## Validation
 
-- `76` automated tests
-- Phase 1 and Phase 2 regression suites preserved
-- Safe source patch transaction tested
-- Weak-proof test hardening tested from `WEAK_PROOF 78/100` to `VERIFIED 98/100`
-- Proof-regressing patch tested with automatic rollback
-- Stale repository state tested fail-closed
-- Approval token hashing and one-time use tested
-- Capability violations and destructive changes tested as blocked
-- Loop attempt limits and repeated patch detection tested
-- Temp sandbox self-verification: recorded in `docs/PHASE3_VALIDATION_REPORT.md`
+- `96` automated tests
+- `19` Phase 4 service, API, UI delivery, security, and CLI tests
+- Phase 1–3 regression suites preserved
+- Local truth snapshot validated
+- Static UI and security headers validated
+- Read-only action blocking validated
+- Per-launch action-token enforcement validated
+- Cross-origin request rejection validated
+- Impact and Context Compiler API workflows validated
+- Approval API and one-time token handling validated
+- Temp and Docker self-verification recorded in `docs/PHASE4_VALIDATION_REPORT.md`
 
 ## Current boundary
 
-Phase 3 governs patches produced by external coding agents and includes a narrow deterministic proof-hardening generator. It does not yet call cloud LLMs, autonomously coordinate the final 12-agent system, deploy to production, or provide the full Command Center UI. Those capabilities belong to later roadmap phases.
+Phase 4 is a local single-repository Command Center. It does not yet provide cloud accounts, team tenancy, remote repository hosting, durable production services, autonomous multi-agent feature delivery, deployment orchestration, or the final software-factory experience. Those belong to Phases 5–8.
 
 See:
 
-- `docs/AGENT_SAFE_FIXES.md`
-- `docs/POLICY_KERNEL.md`
-- `docs/STATE_TRANSACTIONS_AND_LOOP_GOVERNOR.md`
-- `docs/PHASE3_COMPLETION.md`
-- `docs/PHASE3_VALIDATION_REPORT.md`
-- `PHASE3_HANDOFF.md`
+- `docs/COMMAND_CENTER.md`
+- `docs/COMMAND_CENTER_SECURITY.md`
+- `docs/PHASE4_COMPLETION.md`
+- `docs/PHASE4_VALIDATION_REPORT.md`
+- `docs/RELEASE_NOTES_V2_3_ALPHA.md`
+- `PHASE4_HANDOFF.md`
