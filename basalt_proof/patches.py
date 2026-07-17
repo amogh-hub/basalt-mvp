@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
 
 from .models import CheckStatus, FixSuggestion, GeneratedArtifact, ProofReport
@@ -36,8 +37,13 @@ def build_fix_suggestions(report: ProofReport) -> list[FixSuggestion]:
                 )
             )
 
+    low_groups: dict[str, list] = defaultdict(list)
     for finding in report.security_findings:
-        if finding.level.upper() == "HIGH":
+        level = finding.level.upper()
+        if level == "LOW":
+            low_groups[finding.rule].append(finding)
+            continue
+        if level == "HIGH":
             suggestions.append(
                 FixSuggestion(
                     title=f"Resolve policy-blocking finding: {finding.rule}",
@@ -45,8 +51,8 @@ def build_fix_suggestions(report: ProofReport) -> list[FixSuggestion]:
                     category="security_policy",
                     problem=f"{finding.message} at `{finding.file}:{finding.line}`.",
                     recommended_change=(
-                        "Remove the secret/risky operation from source. Use environment variables, a secret vault, "
-                        "or an expand-and-contract migration plan for data-destructive changes."
+                        "Remove the secret or risky operation. Use environment variables, a secret vault, "
+                        "least-privilege configuration, or an expand-and-contract migration plan."
                     ),
                     affected_files=[finding.file],
                     verification_command="basalt verify .",
@@ -56,7 +62,7 @@ def build_fix_suggestions(report: ProofReport) -> list[FixSuggestion]:
             suggestions.append(
                 FixSuggestion(
                     title=f"Review security warning: {finding.rule}",
-                    severity="MEDIUM",
+                    severity=level,
                     category="security_review",
                     problem=f"{finding.message} at `{finding.file}:{finding.line}`.",
                     recommended_change="Review and fix the line, or document why it is safe.",
@@ -65,8 +71,21 @@ def build_fix_suggestions(report: ProofReport) -> list[FixSuggestion]:
                 )
             )
 
-    survived = [m for m in report.mutations if m.survived]
-    for mutation in survived:
+    for rule, findings in sorted(low_groups.items()):
+        affected = list(dict.fromkeys(finding.file for finding in findings))[:8]
+        suggestions.append(
+            FixSuggestion(
+                title=f"Optional cleanup: {rule}",
+                severity="LOW",
+                category="maintainability",
+                problem=f"Basalt found {len(findings)} low-severity `{rule}` finding(s).",
+                recommended_change="Address during normal cleanup; these findings do not block verification.",
+                affected_files=affected,
+                verification_command="basalt verify .",
+            )
+        )
+
+    for mutation in [item for item in report.mutations if item.survived]:
         suggestions.append(
             FixSuggestion(
                 title=f"Strengthen tests for {mutation.file}",
@@ -77,8 +96,8 @@ def build_fix_suggestions(report: ProofReport) -> list[FixSuggestion]:
                     f"(`{mutation.original}` -> `{mutation.replacement}`)."
                 ),
                 recommended_change=(
-                    "Add tests that fail when this logic is changed. Focus on boundary cases, negative paths, "
-                    "auth/permission checks, expected error behavior, and schema/contract assertions."
+                    "Add tests that fail when this logic changes. Focus on boundaries, negative paths, "
+                    "authorization checks, expected errors, and contract assertions."
                 ),
                 affected_files=[mutation.file],
                 verification_command="basalt verify .",
@@ -97,7 +116,7 @@ def build_fix_suggestions(report: ProofReport) -> list[FixSuggestion]:
             )
         )
 
-    if report.score < 90 and not suggestions:
+    if report.score < 90 and not any(item.severity in {"HIGH", "MEDIUM"} for item in suggestions):
         suggestions.append(
             FixSuggestion(
                 title="Raise proof score above 90",
@@ -108,76 +127,75 @@ def build_fix_suggestions(report: ProofReport) -> list[FixSuggestion]:
                 verification_command="basalt verify .",
             )
         )
-
     return suggestions
 
 
 def render_patch_plan(report: ProofReport) -> str:
-    lines: list[str] = []
-    lines.append("# Basalt Proof-to-PR Patch Plan")
-    lines.append("")
-    lines.append(f"**Project:** {report.project_name}")
-    lines.append(f"**Current verdict:** `{report.final_status.value}`")
-    lines.append(f"**Proof score:** `{report.score}/100`")
-    lines.append("")
-    lines.append("This is a PR-ready remediation plan generated from deterministic checks, security scan findings, mutation testing, and AST-backed project graph signals.")
-    lines.append("")
+    lines: list[str] = [
+        "# Basalt Proof-to-PR Patch Plan",
+        "",
+        f"**Project:** {report.project_name}",
+        f"**Current verdict:** `{report.final_status.value}`",
+        f"**Proof score:** `{report.score}/100`",
+        f"**Sandbox:** `{report.sandbox}`",
+        "",
+        "This plan is generated from deterministic checks, security and dependency findings, mutation testing, and AST-backed project signals.",
+        "",
+    ]
     if not report.fix_suggestions:
         lines.append("No fix suggestions required. The project is verified under the configured proof policy.")
         return "\n".join(lines) + "\n"
 
-    lines.append("## Recommended branch")
-    lines.append("")
-    lines.append("```bash")
-    lines.append("git checkout -b basalt/proof-hardening")
-    lines.append("```")
-    lines.append("")
-
-    for i, suggestion in enumerate(report.fix_suggestions, start=1):
-        lines.append(f"## {i}. {suggestion.title}")
-        lines.append("")
-        lines.append(f"- **Severity:** {suggestion.severity}")
-        lines.append(f"- **Category:** {suggestion.category}")
+    lines += ["## Recommended branch", "", "```bash", "git checkout -b basalt/proof-hardening", "```", ""]
+    for index, suggestion in enumerate(report.fix_suggestions, start=1):
+        lines += [
+            f"## {index}. {suggestion.title}",
+            "",
+            f"- **Severity:** {suggestion.severity}",
+            f"- **Category:** {suggestion.category}",
+        ]
         if suggestion.affected_files:
-            lines.append(f"- **Affected files:** {', '.join('`' + f + '`' for f in suggestion.affected_files)}")
-        lines.append(f"- **Problem:** {suggestion.problem}")
-        lines.append(f"- **Recommended change:** {suggestion.recommended_change}")
+            lines.append(f"- **Affected files:** {', '.join('`' + file + '`' for file in suggestion.affected_files)}")
+        lines += [
+            f"- **Problem:** {suggestion.problem}",
+            f"- **Recommended change:** {suggestion.recommended_change}",
+        ]
         if suggestion.verification_command:
             lines.append(f"- **Verify with:** `{suggestion.verification_command}`")
         lines.append("")
 
-    lines.append("## PR acceptance rule")
-    lines.append("")
-    lines.append("Do not merge until Basalt returns `VERIFIED`, or until every remaining high-risk item is explicitly approved by a human reviewer.")
-    lines.append("")
+    lines += [
+        "## PR acceptance rule",
+        "",
+        "Do not merge until Basalt returns `VERIFIED`, or until every remaining high-risk item is explicitly approved by a human reviewer.",
+        "",
+    ]
     return "\n".join(lines)
 
 
 def render_github_pr_description(report: ProofReport) -> str:
     lines = [
-        "# Basalt Proof Hardening PR",
+        "# Basalt Proof Evidence",
         "",
         f"Project: `{report.project_name}`",
-        f"Current Basalt verdict: `{report.final_status.value}`",
+        f"Basalt verdict: `{report.final_status.value}`",
         f"Proof score: `{report.score}/100`",
-        "",
-        "## Why this PR exists",
-        "Basalt found proof, policy, mutation, or security gaps that prevent the repo from being trusted as production-ready.",
+        f"Sandbox: `{report.sandbox}`",
         "",
         "## Required changes",
     ]
     if report.fix_suggestions:
-        for s in report.fix_suggestions:
-            lines.append(f"- [{s.severity}] {s.title}: {s.problem}")
+        for suggestion in report.fix_suggestions:
+            lines.append(f"- [{suggestion.severity}] {suggestion.title}: {suggestion.problem}")
     else:
-        lines.append("- No changes required. Basalt marked the repo verified.")
+        lines.append("- No changes required. Basalt marked the repository verified.")
     lines += [
         "",
         "## Verification checklist",
-        "- [ ] `basalt verify .` returns `VERIFIED` or documented human review exceptions",
+        "- [ ] `basalt verify .` returns `VERIFIED` or documented human-review exceptions",
         "- [ ] No blocking security findings remain",
         "- [ ] Survived mutations are killed by improved tests or explicitly accepted with rationale",
-        "- [ ] Proof report attached to PR",
+        "- [ ] Proof report and dashboard are attached",
     ]
     return "\n".join(lines) + "\n"
 
@@ -190,5 +208,7 @@ def write_patch_artifacts(report: ProofReport, output_dir: Path) -> list[Generat
 
     pr_path = output_dir / "github-pr-description.md"
     pr_path.write_text(render_github_pr_description(report), encoding="utf-8")
-    artifacts.append(GeneratedArtifact("GitHub PR Description", str(pr_path), "Copy/paste PR body for proof-hardening branch"))
+    artifacts.append(
+        GeneratedArtifact("GitHub PR Description", str(pr_path), "Copy/paste PR body for proof-hardening branch")
+    )
     return artifacts

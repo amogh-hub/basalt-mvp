@@ -142,7 +142,7 @@ def _render_python_boundary_tests(module_name: str, candidate: dict, mutation: M
     else:
         lines.append("")
         lines.append(f"    def test_{fn}_mutation_guard(self):")
-        lines.append(f"        # TODO: Add an assertion that fails when {mutation.original} changes to {mutation.replacement}.")
+        lines.append(f"        # Manual assertion required: fail when {mutation.original} changes to {mutation.replacement}.")
         lines.append(f"        self.fail('Basalt could not infer a safe boundary assertion for threshold {threshold!r}.')")
     lines.extend(["", "", "if __name__ == \"__main__\":", "    unittest.main()", ""])
     return "\n".join(lines)

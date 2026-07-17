@@ -5,3 +5,8 @@ __pycache__/
 basalt-demo-run/
 examples/**/.basalt/
 *.egg-info/
+.basalt/
+.basalt-deps/
+.pytest_cache/
+coverage/
+phase1-inspection.txt

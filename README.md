@@ -1,98 +1,128 @@
-# Basalt MVP v1.5 — Final Proof-to-PR Demo MVP
+# Basalt v2.0 Alpha Proof Platform
 
-**Polished package version:** `1.5.1`
+**Version:** `2.0.0a1`
 
-Basalt is a proof-first, prevention-first AI software factory. This MVP is the final demo-ready core engine: it verifies repositories, detects weak proof, generates additive fix patches, reruns proof, produces before/after evidence, and creates PR-ready artifacts.
+Basalt is a proof-first, prevention-first AI software platform. The Phase 1 alpha verifies real repositories, challenges test suites with mutation testing, scans security and dependency risk, runs checks in an isolated sandbox, and produces PR-ready evidence.
 
-This is **not** the full autonomous Basalt product yet. It is the final MVP of the core wedge: **verified software, not vibes.**
+> **Core promise:** Verified software, not vibes.
 
-## What v1.5 includes
+This is the official **Phase 1 — Alpha Proof Platform**. It is not yet the full autonomous AI Software Factory described in the Founder Vision.
 
-- `basalt verify <repo>` — proof check runner
-- `basalt fix <repo> --apply --rerun` — auto-generates additive tests, applies them, reruns proof, and writes before/after proof comparison
-- `basalt pr <repo>` — GitHub PR-ready pack with branch commands and PR body
-- `basalt demo` — one-command final demo flow
-- Temp workspace sandbox by default
-- Docker sandbox option: `--sandbox docker`
-- Policy Kernel command allowlist
-- Security, secret, auth-risk, destructive SQL, dependency hygiene, and quality scanning
-- Mutation testing for weak-test detection
-- AST-Anchored Project Graph preview
-- Premium Command Center HTML dashboard with configured-check clarity (`2/2 passed · 3 skipped`, not misleading `2/5`)
-- Markdown + JSON proof reports
-- Patch plan, fix patch, generated tests, GitHub PR pack
+## What Phase 1 includes
 
-## Install locally
+- Automatic project detection for Python, FastAPI, Node, React, Vite, and Next.js
+- `basalt inspect` for detected commands and sandbox policy
+- Docker-preferred `auto` sandbox with safe temporary-workspace fallback
+- Install-only network policy for dependency installation; checks run with network disabled
+- Command allowlist and fail-closed Docker option
+- Build, lint, type-check, and test execution
+- Multi-candidate deterministic mutation testing
+- Secret, auth-risk, destructive SQL, workflow-permission, dependency, and maintainability scanning
+- AST-anchored source, symbol, import, test-file, and language preview
+- Transparent proof-score breakdown
+- `VERIFIED`, `WEAK_PROOF`, `NOT_VERIFIED`, `NEEDS_HUMAN_REVIEW`, and `BLOCKED_BY_POLICY` verdicts
+- Auto proof-hardening fixes for supported Python and JavaScript boundary cases
+- Markdown, JSON, dashboard, patch-plan, and PR-description artifacts
+- GitHub Actions proof gate with downloadable evidence
+- Python 3.11 and 3.13 CI coverage
+
+## Install
 
 ```bash
 cd basalt-mvp-v1.5-full
-python3.14 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
-pip install -e .
+python -m pip install -e .
 ```
 
-Python 3.10+ works. Python 3.14 works on macOS.
-
-## Run the final demo
+## First run
 
 ```bash
-basalt demo
-open basalt-demo-run/demo_weak/.basalt/basalt-dashboard.html
-open basalt-demo-run/demo_weak/.basalt/before-after-proof.md
+basalt doctor
+basalt inspect .
+basalt verify .
+open .basalt/basalt-dashboard.html
 ```
 
-The demo shows:
-
-- `demo_good` → `VERIFIED`
-- `demo_weak` → `WEAK_PROOF`
-- Basalt auto-generates proof-hardening tests
-- `demo_weak` after fix → `VERIFIED`
-- `demo_policy_violation` → `BLOCKED_BY_POLICY`
-- `demo_node_weak` → JavaScript/Node weak-proof detection
+When Docker is installed and running, `sandbox.mode: auto` uses Docker. When Docker is unavailable and `fallback_to_temp: true`, Basalt uses an isolated temporary copy and records the fallback in the proof report.
 
 ## Core commands
 
 ```bash
-basalt verify examples/demo_good
-basalt verify examples/demo_weak
-basalt fix examples/demo_weak --apply --rerun
-basalt pr examples/demo_weak
-basalt doctor
+basalt init /path/to/repo
+basalt inspect /path/to/repo
+basalt verify /path/to/repo
+basalt fix /path/to/repo --apply --rerun
+basalt pr /path/to/repo
+basalt explain /path/to/repo/.basalt/proof-report.json
+basalt demo
 ```
 
-## Test on your own repo
+## Proof artifacts
+
+Each run can generate:
+
+```text
+.basalt/proof-report.json
+.basalt/proof-report.md
+.basalt/basalt-dashboard.html
+.basalt/basalt-patch-plan.md
+.basalt/github-pr-description.md
+```
+
+## GitHub Actions
+
+The included workflow:
+
+- runs unit tests on Python 3.11 and 3.13;
+- runs Basalt verification;
+- enforces a `VERIFIED` verdict;
+- writes a GitHub job summary;
+- uploads the full `.basalt/` evidence directory.
+
+## Built-in alpha demo
 
 ```bash
-cd /path/to/your/repo
-basalt init . --force
-basalt verify .
-basalt fix . --apply --rerun
-basalt pr .
+basalt demo
 ```
 
-For real projects, edit `basalt.yaml` so Basalt runs your actual build/test commands.
+Expected proof story:
 
-## Why this MVP matters
+- `demo_good` → `VERIFIED`
+- `demo_weak` → `WEAK_PROOF`
+- auto proof-hardening → `VERIFIED`
+- `demo_node_weak` → `WEAK_PROOF`, then `VERIFIED`
+- `demo_policy_violation` → `BLOCKED_BY_POLICY`
 
-Most coding tools stop at generated code or passing tests. Basalt tests the proof itself with mutation testing, policy checks, AST-backed evidence, and before/after verification. It is designed to answer the question: **can this software be trusted?**
+## Configuration
 
-## Final MVP scope
+Create a starter configuration:
 
-Included in MVP:
+```bash
+basalt init . --force
+```
 
-- Proof Layer
-- Weak-proof detection
-- Auto-fix for safe additive tests
-- Dashboard
-- PR-ready artifacts
-- Real repo verification path
+Important sandbox settings:
 
-Post-MVP:
+```yaml
+sandbox:
+  mode: auto
+  docker_image: python:3.13-slim
+  network: install-only
+  fallback_to_temp: true
+```
 
-- Full Product Brain
-- 12 autonomous specialist agents
-- Full app generation
-- Deployment automation
-- Enterprise workspace
-- Long-term maintenance agent
+Use `fallback_to_temp: false` when Docker isolation is mandatory and verification must fail closed if Docker is unavailable.
+
+## Current boundary
+
+Phase 1 is a serious alpha proof platform. It does not yet include the Product Brain, full Project Knowledge Graph, Context Compiler, governed multi-agent engineering, deployment orchestration, or continuous maintenance system. Those belong to later official Basalt phases.
+
+See:
+
+- `docs/ALPHA_V2.md`
+- `docs/REAL_REPO_GUIDE.md`
+- `docs/SECURITY_AND_SANDBOX.md`
+- `docs/VALIDATION_REPORT.md`
+- `docs/PHASE1_COMPLETION.md`

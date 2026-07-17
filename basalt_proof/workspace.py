@@ -4,7 +4,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-EXCLUDE_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".pytest_cache", "dist", "build", ".next", ".basalt"}
+EXCLUDE_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".pytest_cache", "dist", "build", ".next", ".basalt", ".basalt-deps"}
 EXCLUDE_FILES = {"proof-report.json", "proof-report.md", "basalt-dashboard.html", "basalt-patch-plan.md", "knowledge-graph.json"}
 
 

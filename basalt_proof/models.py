@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -27,6 +27,7 @@ class CommandSpec:
     command: str | None
     required: bool = False
     timeout_seconds: int = 300
+    allow_network: bool = False
 
 
 @dataclass
@@ -39,6 +40,7 @@ class CommandResult:
     stdout_tail: str = ""
     stderr_tail: str = ""
     message: str = ""
+    sandbox: str = "temp"
 
 
 @dataclass
@@ -59,6 +61,7 @@ class MutationResult:
     survived: bool
     test_status: CheckStatus
     message: str
+    line: int | None = None
 
 
 @dataclass
@@ -84,6 +87,7 @@ class KnowledgeGraph:
     edges: list[GraphEdge] = field(default_factory=list)
     test_files: list[str] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)
+    languages: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -113,6 +117,8 @@ class ProofReport:
     final_status: FinalStatus
     score: int
     sandbox: str = "temp"
+    sandbox_requested: str = "temp"
+    sandbox_fallback_reason: str | None = None
     project_type: str = "unknown"
     checks: list[CommandResult] = field(default_factory=list)
     security_findings: list[SecurityFinding] = field(default_factory=list)
@@ -121,9 +127,11 @@ class ProofReport:
     fix_suggestions: list[FixSuggestion] = field(default_factory=list)
     risks: list[dict[str, Any]] = field(default_factory=list)
     artifacts: list[GeneratedArtifact] = field(default_factory=list)
+    score_breakdown: list[dict[str, Any]] = field(default_factory=list)
     evidence_dir: str | None = None
     dashboard_path: str | None = None
     patch_plan_path: str | None = None
+    basalt_version: str = "2.0.0a1"
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -131,7 +139,11 @@ class ProofReport:
         for check in data["checks"]:
             check["status"] = check["status"].value if hasattr(check["status"], "value") else check["status"]
         for mutation in data["mutations"]:
-            mutation["test_status"] = mutation["test_status"].value if hasattr(mutation["test_status"], "value") else mutation["test_status"]
+            mutation["test_status"] = (
+                mutation["test_status"].value
+                if hasattr(mutation["test_status"], "value")
+                else mutation["test_status"]
+            )
         return data
 
 
@@ -142,16 +154,23 @@ class BasaltConfig:
     commands: list[CommandSpec] = field(default_factory=list)
     mutation_sample: bool = True
     mutation_max: int = 8
+    mutation_per_file: int = 2
+    mutation_include: list[str] = field(default_factory=list)
+    mutation_exclude: list[str] = field(default_factory=list)
     security_scan: str = "basic"
+    scan_exclude: list[str] = field(default_factory=list)
     max_test_failures: int = 0
+    min_verified_score: int = 80
     block_secrets: bool = True
     block_destructive_migrations: bool = True
     require_human_approval_for_deploy: bool = True
     generate_dashboard: bool = True
     generate_patch_plan: bool = True
     generate_pr_pack: bool = True
-    sandbox: str = "temp"
+    sandbox: str = "auto"
     docker_image: str | None = None
+    docker_network: str = "install-only"
+    docker_fallback: bool = True
 
     def command_by_name(self, name: str) -> CommandSpec | None:
         return next((cmd for cmd in self.commands if cmd.name == name), None)
