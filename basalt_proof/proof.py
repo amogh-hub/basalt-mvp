@@ -90,6 +90,7 @@ def verify_repo(repo_path: Path, keep_workspace: bool = False, sandbox_override:
             security_findings = scan_repo(
                 workspace.path,
                 block_destructive_migrations=config.block_destructive_migrations,
+                excluded_paths=config.scan_exclude,
             )
 
         graph = build_knowledge_graph(workspace.path)
@@ -97,7 +98,14 @@ def verify_repo(repo_path: Path, keep_workspace: bool = False, sandbox_override:
         tests_passed = any(c.name == "test" and c.status == CheckStatus.PASS for c in checks)
         mutations = []
         if config.mutation_sample and tests_passed:
-            mutations = run_mutation_sample(workspace.path, test_spec, executor=executor, max_mutations=config.mutation_max)
+            mutations = run_mutation_sample(
+                workspace.path,
+                test_spec,
+                executor=executor,
+                max_mutations=config.mutation_max,
+                include_paths=config.mutation_include,
+                exclude_paths=config.mutation_exclude,
+            )
 
         risks = _risk_model(security_findings)
 

@@ -97,16 +97,33 @@ class _PythonMutator(ast.NodeTransformer):
         return node
 
 
-def _candidate_files(repo_path: Path) -> list[Path]:
+def _matches_path(relative: str, patterns: list[str] | None) -> bool:
+    for pattern in patterns or []:
+        normalized = pattern.strip().strip("/")
+        if normalized and (relative == normalized or relative.startswith(normalized + "/")):
+            return True
+    return False
+
+
+def _candidate_files(
+    repo_path: Path,
+    include_paths: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
+) -> list[Path]:
     candidates: list[Path] = []
     for path in repo_path.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in SOURCE_EXTENSIONS:
             continue
+        relative = path.relative_to(repo_path).as_posix()
         lowered_parts = {part.lower() for part in path.relative_to(repo_path).parts}
         if lowered_parts & SKIP_PARTS:
             continue
+        if include_paths and not _matches_path(relative, include_paths):
+            continue
+        if _matches_path(relative, exclude_paths):
+            continue
         candidates.append(path)
-    return candidates
+    return sorted(candidates, key=lambda item: item.relative_to(repo_path).as_posix())
 
 
 def _python_ast_candidate(file_path: Path) -> MutationCandidate | None:
@@ -140,12 +157,19 @@ def _find_mutation(file_path: Path) -> MutationCandidate | None:
     return _text_candidate(file_path)
 
 
-def run_mutation_sample(repo_path: Path, test_command: CommandSpec | None, executor: CommandExecutor, max_mutations: int = 8) -> list[MutationResult]:
+def run_mutation_sample(
+    repo_path: Path,
+    test_command: CommandSpec | None,
+    executor: CommandExecutor,
+    max_mutations: int = 8,
+    include_paths: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
+) -> list[MutationResult]:
     if test_command is None or not test_command.command:
         return []
 
     results: list[MutationResult] = []
-    for file_path in _candidate_files(repo_path):
+    for file_path in _candidate_files(repo_path, include_paths, exclude_paths):
         if len(results) >= max_mutations:
             break
         original_text = file_path.read_text(encoding="utf-8", errors="ignore")

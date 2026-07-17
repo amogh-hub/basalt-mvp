@@ -158,6 +158,14 @@ def _command_spec(name: str, command: str | None, required: bool, timeout: int =
     return CommandSpec(name=name, command=command, required=required, timeout_seconds=timeout)
 
 
+def _csv_list(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
 def load_config(repo_path: Path) -> BasaltConfig:
     raw = load_raw_config(repo_path)
     project = raw.get("project", {}) if isinstance(raw.get("project", {}), dict) else {}
@@ -187,7 +195,10 @@ def load_config(repo_path: Path) -> BasaltConfig:
         commands=specs,
         mutation_sample=bool(proof.get("mutation_sample", True)),
         mutation_max=int(proof.get("mutation_max", 8)),
+        mutation_include=_csv_list(proof.get("mutation_include")),
+        mutation_exclude=_csv_list(proof.get("mutation_exclude")),
         security_scan=str(proof.get("security_scan", "basic")),
+        scan_exclude=_csv_list(proof.get("scan_exclude")),
         max_test_failures=int(proof.get("max_test_failures", 0)),
         block_secrets=bool(policy.get("block_secrets", True)),
         block_destructive_migrations=bool(policy.get("block_destructive_migrations", True)),

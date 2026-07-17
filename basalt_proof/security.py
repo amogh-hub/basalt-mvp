@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import json
 import re
+import tokenize
 from pathlib import Path
 
 from .models import SecurityFinding
@@ -38,10 +40,33 @@ TEXT_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".yaml", ".yml"
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next", ".basalt", "coverage"}
 
 
-def _should_scan(path: Path) -> bool:
+def _matches_excluded_path(relative: str, excluded_paths: list[str] | None) -> bool:
+    for excluded in excluded_paths or []:
+        normalized = excluded.strip().strip("/")
+        if normalized and (relative == normalized or relative.startswith(normalized + "/")):
+            return True
+    return False
+
+
+def _should_scan(path: Path, repo_path: Path, excluded_paths: list[str] | None = None) -> bool:
     if any(part in SKIP_DIRS for part in path.parts):
         return False
+    relative = path.relative_to(repo_path).as_posix()
+    if _matches_excluded_path(relative, excluded_paths):
+        return False
     return path.suffix.lower() in TEXT_EXTENSIONS or path.name.startswith(".env")
+
+
+def _python_string_lines(text: str) -> set[int]:
+    lines: set[int] = set()
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(text).readline)
+        for token in tokens:
+            if token.type == tokenize.STRING:
+                lines.update(range(token.start[0], token.end[0] + 1))
+    except (tokenize.TokenError, IndentationError):
+        return set()
+    return lines
 
 
 def _scan_dependency_hygiene(repo_path: Path) -> list[SecurityFinding]:
@@ -81,30 +106,59 @@ def _scan_dependency_hygiene(repo_path: Path) -> list[SecurityFinding]:
     return findings
 
 
-def _scan_quality(path: Path, relative: str, text: str) -> list[SecurityFinding]:
+def _scan_quality(
+    path: Path,
+    relative: str,
+    text: str,
+    python_string_lines: set[int] | None = None,
+) -> list[SecurityFinding]:
     findings: list[SecurityFinding] = []
+    string_lines = python_string_lines or set()
     for line_number, line in enumerate(text.splitlines(), start=1):
         if len(line) > 180:
-            findings.append(SecurityFinding("MEDIUM", relative, line_number, "long_line_complexity", "Line is very long and may be hard to maintain."))
+            findings.append(
+                SecurityFinding(
+                    "LOW",
+                    relative,
+                    line_number,
+                    "long_line_complexity",
+                    "Line is very long and may be hard to maintain.",
+                )
+            )
         for rule, pattern in QUALITY_PATTERNS:
+            if line_number in string_lines:
+                continue
             if pattern.search(line) and path.suffix.lower() in {".py", ".js", ".jsx", ".ts", ".tsx"}:
                 if rule == "console_log_leftover" and ("test" in relative.lower() or "spec" in relative.lower()):
                     continue
-                findings.append(SecurityFinding("MEDIUM", relative, line_number, rule, "Potential quality or maintainability risk requires review."))
+                findings.append(
+                    SecurityFinding(
+                        "MEDIUM",
+                        relative,
+                        line_number,
+                        rule,
+                        "Potential quality or maintainability risk requires review.",
+                    )
+                )
     return findings
 
 
-def scan_repo(repo_path: Path, block_destructive_migrations: bool = True) -> list[SecurityFinding]:
+def scan_repo(
+    repo_path: Path,
+    block_destructive_migrations: bool = True,
+    excluded_paths: list[str] | None = None,
+) -> list[SecurityFinding]:
     findings: list[SecurityFinding] = []
     findings.extend(_scan_dependency_hygiene(repo_path))
     for path in repo_path.rglob("*"):
-        if not path.is_file() or not _should_scan(path):
+        if not path.is_file() or not _should_scan(path, repo_path, excluded_paths):
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         relative = str(path.relative_to(repo_path))
+        string_lines = _python_string_lines(text) if path.suffix.lower() == ".py" else set()
         for line_number, line in enumerate(text.splitlines(), start=1):
             for rule, pattern in SECRET_PATTERNS:
                 if pattern.search(line):
@@ -113,9 +167,18 @@ def scan_repo(repo_path: Path, block_destructive_migrations: bool = True) -> lis
                 for rule, pattern in DESTRUCTIVE_SQL_PATTERNS:
                     if pattern.search(line):
                         findings.append(SecurityFinding("HIGH", relative, line_number, rule, "Destructive SQL migration requires expand-and-contract approval."))
-            for rule, pattern in AUTH_RISK_PATTERNS:
-                if pattern.search(line):
-                    level = "HIGH" if rule in {"dangerously_set_inner_html"} else "MEDIUM"
-                    findings.append(SecurityFinding(level, relative, line_number, rule, "Possible auth/security risk requires review."))
-        findings.extend(_scan_quality(path, relative, text))
+            if line_number not in string_lines:
+                for rule, pattern in AUTH_RISK_PATTERNS:
+                    if pattern.search(line):
+                        level = "HIGH" if rule in {"dangerously_set_inner_html"} else "MEDIUM"
+                        findings.append(
+                            SecurityFinding(
+                                level,
+                                relative,
+                                line_number,
+                                rule,
+                                "Possible auth/security risk requires review.",
+                            )
+                        )
+        findings.extend(_scan_quality(path, relative, text, string_lines))
     return findings

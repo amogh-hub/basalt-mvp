@@ -142,7 +142,10 @@ class BasaltConfig:
     commands: list[CommandSpec] = field(default_factory=list)
     mutation_sample: bool = True
     mutation_max: int = 8
+    mutation_include: list[str] = field(default_factory=list)
+    mutation_exclude: list[str] = field(default_factory=list)
     security_scan: str = "basic"
+    scan_exclude: list[str] = field(default_factory=list)
     max_test_failures: int = 0
     block_secrets: bool = True
     block_destructive_migrations: bool = True

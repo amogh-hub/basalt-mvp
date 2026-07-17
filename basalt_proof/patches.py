@@ -56,7 +56,7 @@ def build_fix_suggestions(report: ProofReport) -> list[FixSuggestion]:
             suggestions.append(
                 FixSuggestion(
                     title=f"Review security warning: {finding.rule}",
-                    severity="MEDIUM",
+                    severity=finding.level.upper(),
                     category="security_review",
                     problem=f"{finding.message} at `{finding.file}:{finding.line}`.",
                     recommended_change="Review and fix the line, or document why it is safe.",
