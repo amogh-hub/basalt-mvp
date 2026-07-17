@@ -142,6 +142,71 @@
       "tests": [
         "tests/test_phase3_agent_safe_fixes.py"
       ]
+    },
+    {
+      "id": "command-center-web-app",
+      "name": "Command Center Web App",
+      "description": "Local truth-compression web interface for proof, repository knowledge, risk, transactions, approvals, and evidence.",
+      "keywords": [
+        "command center",
+        "dashboard",
+        "web",
+        "truth",
+        "proof",
+        "risk"
+      ],
+      "files": [
+        "basalt_proof/command_center.py",
+        "basalt_proof/command_center_server.py",
+        "basalt_proof/webui/index.html",
+        "basalt_proof/webui/app.js",
+        "basalt_proof/webui/styles.css",
+        "basalt_proof/cli.py"
+      ],
+      "tests": [
+        "tests/test_phase4_command_center.py"
+      ]
+    },
+    {
+      "id": "command-center-security",
+      "name": "Command Center Security Boundary",
+      "description": "Read-only defaults, localhost binding, same-origin enforcement, action tokens, security headers, and evidence containment.",
+      "keywords": [
+        "localhost",
+        "same origin",
+        "token",
+        "csp",
+        "read only",
+        "artifact"
+      ],
+      "files": [
+        "basalt_proof/command_center.py",
+        "basalt_proof/command_center_server.py",
+        "docs/COMMAND_CENTER_SECURITY.md"
+      ],
+      "tests": [
+        "tests/test_phase4_command_center.py"
+      ]
+    },
+    {
+      "id": "command-center-api",
+      "name": "Command Center Local API",
+      "description": "Versioned local API for overview, proof, graph analysis, context, runs, approvals, verification, rollback, and evidence.",
+      "keywords": [
+        "api",
+        "overview",
+        "impact",
+        "context",
+        "approval",
+        "rollback"
+      ],
+      "files": [
+        "basalt_proof/command_center.py",
+        "basalt_proof/command_center_server.py"
+      ],
+      "tests": [
+        "tests/test_phase4_command_center.py"
+      ]
     }
   ]
 }

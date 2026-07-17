@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.3.0-alpha.1 — Phase 4 Command Center Platform
+
+### Added
+
+- Local browser-based Command Center Web App
+- Truth-compression repository overview for intent, proof, risk, progress, approvals, and recent transactions
+- Live proof checks, security findings, mutation evidence, and sandbox status
+- Project Knowledge Graph metrics, freshness, language distribution, and state identity
+- Interactive change-impact analysis and task-specific Context Compiler
+- Governed agent transaction ledger and run detail explorer
+- Human approval center for pending proposals
+- Whitelisted evidence vault with safe inline artifact preview
+- Versioned local JSON API under `/api/v1`
+- Read-only mode by default and explicit `--allow-actions` mode
+- Per-launch action token, same-origin enforcement, request size limits, and localhost-only binding
+- CSP, frame denial, no-store, MIME sniffing protection, and referrer protection
+- New `basalt command-center` CLI with browser, port, snapshot, and security options
+- 20 Phase 4 tests, bringing the complete suite to 96 tests
+- Phase 4 architecture, security, validation, completion, release, and handoff documentation
+
+### Changed
+
+- Package version upgraded from 2.2.0a1 to 2.3.0a1
+- Product identity updated to the Basalt v2.3 Alpha Command Center Platform
+- Static proof dashboard branding aligned with Phase 4
+- GitHub Actions expanded with Command Center snapshot and HTTP API smoke tests
+
+### Preserved
+
+- All Phase 1 proof, sandbox, mutation, security, scoring, and CI capabilities
+- All Phase 2 graph, freshness, impact-analysis, and Context Compiler capabilities
+- All Phase 3 Policy Kernel, approval, state transaction, proof comparison, and rollback capabilities
+
 ## 2.2.0-alpha.1 — Phase 3 Safe Fix Platform
 
 ### Added

@@ -1,5 +1,5 @@
 project:
-  name: basalt-v2.2-alpha
+  name: basalt-v2.3-alpha
   type: python
 commands:
   install: null
