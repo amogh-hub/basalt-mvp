@@ -37,13 +37,16 @@ jobs:
           python -m unittest discover -s tests -v
 
       - name: Run Basalt verification
+        continue-on-error: true
         run: |
           basalt verify .
 
       - name: Enforce VERIFIED verdict
+        if: always()
         run: |
           python - <<'PY'
           import json
+          import os
           import sys
           from pathlib import Path
 
@@ -59,9 +62,37 @@ jobs:
 
           status = report.get("final_status", "UNKNOWN")
           score = report.get("score", 0)
+          mutations = report.get("mutations", [])
+          findings = report.get("security_findings", [])
+
+          survived = sum(
+              1 for mutation in mutations
+              if mutation.get("survived") is True
+          )
+
+          high_findings = sum(
+              1 for finding in findings
+              if str(finding.get("level", "")).upper() == "HIGH"
+          )
 
           print(f"Basalt verdict: {status}")
           print(f"Proof score: {score}/100")
+          print(f"Survived mutations: {survived}")
+          print(f"High findings: {high_findings}")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as summary:
+                  summary.write("# Basalt Proof Report\n\n")
+                  summary.write(f"- **Verdict:** `{status}`\n")
+                  summary.write(f"- **Proof score:** `{score}/100`\n")
+                  summary.write(
+                      f"- **Survived mutations:** `{survived}`\n"
+                  )
+                  summary.write(
+                      f"- **High findings:** `{high_findings}`\n"
+                  )
 
           if status != "VERIFIED":
               print("ERROR: Repository is not VERIFIED.")
@@ -69,3 +100,13 @@ jobs:
 
           print("Basalt Proof Gate passed.")
           PY
+
+      - name: Upload Basalt proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-proof-${{ github.run_number }}
+          path: .basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
