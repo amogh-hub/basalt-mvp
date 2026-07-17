@@ -8,6 +8,17 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .agent_runtime import (
+    AgentRunError,
+    apply_agent_run,
+    approve_agent_run,
+    list_agent_runs,
+    load_agent_run,
+    plan_agent_fix,
+    reject_agent_run,
+    revise_agent_run,
+    rollback_agent_run,
+)
 from .autofix import write_fix_bundle
 from .compare import write_before_after_artifacts
 from .config import infer_commands, infer_project_type, load_config, render_default_config
@@ -29,7 +40,7 @@ from .report import write_json_report, write_markdown_report
 from .runner import docker_status
 
 
-PRODUCT_NAME = "Basalt v2.1 Alpha Knowledge Platform"
+PRODUCT_NAME = "Basalt v2.2 Alpha Safe Fix Platform"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -126,6 +137,65 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("--out", type=Path, default=None)
     context.add_argument("--no-refresh", action="store_true")
     context.add_argument("--json", action="store_true")
+
+    agent = subparsers.add_parser("agent", help="Plan, approve, apply, and audit governed agent-assisted fixes")
+    agent_commands = agent.add_subparsers(dest="agent_command")
+
+    agent_plan = agent_commands.add_parser("plan", help="Compile context and produce a policy-checked patch proposal")
+    agent_plan.add_argument("repo", type=Path)
+    agent_plan.add_argument("--task", required=True)
+    agent_plan.add_argument("--role", default="ImplementationAgent")
+    agent_plan.add_argument("--target", action="append", default=[])
+    agent_plan.add_argument("--patch", type=Path, default=None, help="External unified diff to govern")
+    agent_plan.add_argument("--out", type=Path, default=None)
+    agent_plan.add_argument("--sandbox", choices=["auto", "temp", "docker"], default=None)
+    agent_plan.add_argument("--budget", type=int, default=None)
+    agent_plan.add_argument("--json", action="store_true")
+
+    agent_approve = agent_commands.add_parser("approve", help="Record human approval and issue a one-time apply token")
+    agent_approve.add_argument("repo", type=Path)
+    agent_approve.add_argument("run_id")
+    agent_approve.add_argument("--by", required=True)
+    agent_approve.add_argument("--reason", required=True)
+    agent_approve.add_argument("--out", type=Path, default=None)
+    agent_approve.add_argument("--json", action="store_true")
+
+    agent_apply = agent_commands.add_parser("apply", help="Apply an approved patch transaction and run full proof")
+    agent_apply.add_argument("repo", type=Path)
+    agent_apply.add_argument("run_id")
+    agent_apply.add_argument("--token", default=None)
+    agent_apply.add_argument("--out", type=Path, default=None)
+    agent_apply.add_argument("--sandbox", choices=["auto", "temp", "docker"], default=None)
+    agent_apply.add_argument("--json", action="store_true")
+
+    agent_status = agent_commands.add_parser("status", help="Show one agent run or list recent runs")
+    agent_status.add_argument("repo", type=Path)
+    agent_status.add_argument("run_id", nargs="?", default=None)
+    agent_status.add_argument("--out", type=Path, default=None)
+    agent_status.add_argument("--json", action="store_true")
+
+    agent_reject = agent_commands.add_parser("reject", help="Reject a pending proposal")
+    agent_reject.add_argument("repo", type=Path)
+    agent_reject.add_argument("run_id")
+    agent_reject.add_argument("--by", required=True)
+    agent_reject.add_argument("--reason", required=True)
+    agent_reject.add_argument("--out", type=Path, default=None)
+    agent_reject.add_argument("--json", action="store_true")
+
+    agent_revise = agent_commands.add_parser("revise", help="Submit a revised patch under the Loop Governor")
+    agent_revise.add_argument("repo", type=Path)
+    agent_revise.add_argument("run_id")
+    agent_revise.add_argument("--patch", type=Path, required=True)
+    agent_revise.add_argument("--out", type=Path, default=None)
+    agent_revise.add_argument("--json", action="store_true")
+
+    agent_rollback = agent_commands.add_parser("rollback", help="Roll back a previously verified transaction")
+    agent_rollback.add_argument("repo", type=Path)
+    agent_rollback.add_argument("run_id")
+    agent_rollback.add_argument("--by", required=True)
+    agent_rollback.add_argument("--reason", required=True)
+    agent_rollback.add_argument("--out", type=Path, default=None)
+    agent_rollback.add_argument("--json", action="store_true")
     return parser
 
 
@@ -360,6 +430,16 @@ def run_inspect(args: argparse.Namespace) -> int:
         "context": {
             "token_budget": config.context_token_budget,
         },
+        "agents": {
+            "enabled": config.agents_enabled,
+            "max_files": config.agent_max_files,
+            "max_changed_lines": config.agent_max_changed_lines,
+            "max_attempts": config.agent_max_attempts,
+            "require_human_approval_for_source": config.agent_require_human_approval_for_source,
+            "allow_test_only_auto_apply": config.agent_allow_test_only_auto_apply,
+            "protected_paths": config.agent_protected_paths,
+            "allowed_roles": config.agent_allowed_roles,
+        },
     }
     if args.json:
         print(json.dumps(data, indent=2))
@@ -526,6 +606,121 @@ def run_context(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_agent_run(run) -> None:
+    print("Basalt Agent-Assisted Safe Fix")
+    print(f"- run: {run.run_id}")
+    print(f"- status: {run.status.value}")
+    print(f"- task: {run.task}")
+    print(f"- role: {run.agent_role}")
+    print(f"- base state: {run.base_state_hash}")
+    if run.policy_decision:
+        print(f"- policy: {run.policy_decision.verdict.value}")
+        print(f"- risk: {run.policy_decision.risk_level}")
+        print(f"- files: {run.policy_decision.patch_stats.files_changed}")
+        print(f"- changed lines: {run.policy_decision.patch_stats.changed_lines}")
+    if run.verification_delta:
+        print(
+            f"- proof: {run.verification_delta.before_status} "
+            f"({run.verification_delta.before_score}) -> "
+            f"{run.verification_delta.after_status} "
+            f"({run.verification_delta.after_score})"
+        )
+    print(f"- message: {run.message}")
+
+
+def run_agent(args: argparse.Namespace) -> int:
+    if not args.agent_command:
+        print("Choose one of: plan, approve, apply, status, reject, revise, rollback", file=sys.stderr)
+        return 2
+    repo = args.repo.resolve()
+    out_dir = args.out.resolve() if getattr(args, "out", None) else None
+    try:
+        if args.agent_command == "plan":
+            run = plan_agent_fix(
+                repo,
+                task=args.task,
+                agent_role=args.role,
+                targets=args.target,
+                patch_file=args.patch,
+                out_dir=out_dir,
+                sandbox=args.sandbox,
+                token_budget=args.budget,
+            )
+            if args.json:
+                print(json.dumps(run.to_dict(), indent=2))
+            else:
+                _print_agent_run(run)
+                print(f"- artifacts: {(out_dir or repo / '.basalt') / 'agent-runs' / run.run_id}")
+                if run.status.value == "AWAITING_APPROVAL":
+                    print(f"Next: basalt agent approve {repo} {run.run_id} --by <name> --reason <reason>")
+            return 0 if run.status.value in {"AWAITING_APPROVAL", "APPROVED"} else 1
+
+        if args.agent_command == "approve":
+            run, token = approve_agent_run(repo, args.run_id, args.by, args.reason, out_dir=out_dir)
+            if args.json:
+                data = run.to_dict()
+                data["approval_token"] = token
+                print(json.dumps(data, indent=2))
+            else:
+                _print_agent_run(run)
+                print("- one-time approval token:")
+                print(token)
+                print("Store this token now. Basalt stores only its hash and will not display it again.")
+            return 0
+
+        if args.agent_command == "apply":
+            run = apply_agent_run(
+                repo,
+                args.run_id,
+                approval_token=args.token,
+                out_dir=out_dir,
+                sandbox=args.sandbox,
+            )
+            if args.json:
+                print(json.dumps(run.to_dict(), indent=2))
+            else:
+                _print_agent_run(run)
+            return 0 if run.status.value == "VERIFIED" else 1
+
+        if args.agent_command == "status":
+            if args.run_id:
+                run, run_dir = load_agent_run(repo, args.run_id, out_dir)
+                if args.json:
+                    print(json.dumps(run.to_dict(), indent=2))
+                else:
+                    _print_agent_run(run)
+                    print(f"- artifacts: {run_dir}")
+            else:
+                runs = list_agent_runs(repo, out_dir)
+                if args.json:
+                    print(json.dumps(runs, indent=2))
+                else:
+                    print("Basalt Agent Runs")
+                    if not runs:
+                        print("- no runs found")
+                    for item in runs:
+                        print(
+                            f"- {item.get('run_id')}: {item.get('status')} "
+                            f"[{item.get('risk')}] {item.get('task')}"
+                        )
+            return 0
+
+        if args.agent_command == "reject":
+            run = reject_agent_run(repo, args.run_id, args.by, args.reason, out_dir=out_dir)
+        elif args.agent_command == "revise":
+            run = revise_agent_run(repo, args.run_id, args.patch, out_dir=out_dir)
+        else:
+            run = rollback_agent_run(repo, args.run_id, args.by, args.reason, out_dir=out_dir)
+        if args.json:
+            print(json.dumps(run.to_dict(), indent=2))
+        else:
+            _print_agent_run(run)
+        return 0 if run.status.value not in {"FAILED", "STUCK", "STALE_STATE"} else 1
+    except (AgentRunError, OSError, ValueError) as exc:
+        print(f"Basalt agent error: {exc}", file=sys.stderr)
+        return 1
+
+
 def run_doctor(args: argparse.Namespace) -> int:
     docker_ok, docker_reason = docker_status()
     info = {
@@ -582,6 +777,7 @@ def main(argv: list[str] | None = None) -> int:
         "graph": run_graph,
         "impact": run_impact,
         "context": run_context,
+        "agent": run_agent,
     }
     handler = handlers.get(args.command)
     if handler:

@@ -1,5 +1,5 @@
 project:
-  name: basalt-v2.1-alpha
+  name: basalt-v2.2-alpha
   type: python
 commands:
   install: null
@@ -38,3 +38,12 @@ knowledge_graph:
   exclude: examples,basalt-demo-run
 context:
   token_budget: 12000
+agents:
+  enabled: true
+  max_files: 8
+  max_changed_lines: 400
+  max_attempts: 3
+  require_human_approval_for_source: true
+  allow_test_only_auto_apply: false
+  protected_paths: .github/workflows,.env,infra,deploy
+  allowed_roles: ImplementationAgent,BuilderAgent,FrontendAgent,BackendAgent,DatabaseAgent,TestingAgent,DevOpsAgent,DocumentationAgent

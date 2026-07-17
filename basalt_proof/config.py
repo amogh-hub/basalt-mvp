@@ -258,6 +258,7 @@ def load_config(repo_path: Path) -> BasaltConfig:
         else {}
     )
     context = raw.get("context", {}) if isinstance(raw.get("context", {}), dict) else {}
+    agents = raw.get("agents", {}) if isinstance(raw.get("agents", {}), dict) else {}
 
     project_name = str(project.get("name") or repo_path.name)
     project_type = str(project.get("type") or infer_project_type(repo_path))
@@ -330,6 +331,18 @@ def load_config(repo_path: Path) -> BasaltConfig:
         graph_auto_refresh=bool(knowledge_graph.get("auto_refresh", True)),
         graph_exclude=_csv_list(knowledge_graph.get("exclude")),
         context_token_budget=max(500, int(context.get("token_budget", 12000))),
+        agents_enabled=bool(agents.get("enabled", True)),
+        agent_max_files=max(1, int(agents.get("max_files", 8))),
+        agent_max_changed_lines=max(1, int(agents.get("max_changed_lines", 400))),
+        agent_max_attempts=max(1, int(agents.get("max_attempts", 3))),
+        agent_require_human_approval_for_source=bool(
+            agents.get("require_human_approval_for_source", True)
+        ),
+        agent_allow_test_only_auto_apply=bool(agents.get("allow_test_only_auto_apply", False)),
+        agent_protected_paths=_csv_list(
+            agents.get("protected_paths", ".github/workflows,.env,infra,deploy")
+        ),
+        agent_allowed_roles=_csv_list(agents.get("allowed_roles")),
     )
 
 
@@ -354,4 +367,4 @@ def render_default_config(project_name: str = "my-app", project_type: str = "pyt
         )
         require_build = "false"
         require_typecheck = "false"
-    return f"""project:\n  name: {project_name}\n  type: {project_type}\ncommands:\n{commands}\nproof:\n  require_build: {require_build}\n  require_lint: true\n  require_typecheck: {require_typecheck}\n  require_tests: true\n  mutation_sample: true\n  mutation_max: 8\n  mutation_per_file: 2\n  mutation_test_command: null\n  mutation_include: null\n  mutation_exclude: examples,dist,build\n  security_scan: basic\n  scan_exclude: examples/demo_policy_violation,fixtures\n  min_verified_score: 80\n  dashboard: true\n  patch_plan: true\n  pr_pack: true\npolicy:\n  block_secrets: true\n  block_destructive_migrations: true\n  require_human_approval_for_deploy: true\nsandbox:\n  mode: auto\n  docker_image: null\n  network: install-only\n  fallback_to_temp: true\nknowledge_graph:\n  auto_refresh: true\n  exclude: examples,dist,build\ncontext:\n  token_budget: 12000\n"""
+    return f"""project:\n  name: {project_name}\n  type: {project_type}\ncommands:\n{commands}\nproof:\n  require_build: {require_build}\n  require_lint: true\n  require_typecheck: {require_typecheck}\n  require_tests: true\n  mutation_sample: true\n  mutation_max: 8\n  mutation_per_file: 2\n  mutation_test_command: null\n  mutation_include: null\n  mutation_exclude: examples,dist,build\n  security_scan: basic\n  scan_exclude: examples/demo_policy_violation,fixtures\n  min_verified_score: 80\n  dashboard: true\n  patch_plan: true\n  pr_pack: true\npolicy:\n  block_secrets: true\n  block_destructive_migrations: true\n  require_human_approval_for_deploy: true\nsandbox:\n  mode: auto\n  docker_image: null\n  network: install-only\n  fallback_to_temp: true\nknowledge_graph:\n  auto_refresh: true\n  exclude: examples,dist,build\ncontext:\n  token_budget: 12000\nagents:\n  enabled: true\n  max_files: 8\n  max_changed_lines: 400\n  max_attempts: 3\n  require_human_approval_for_source: true\n  allow_test_only_auto_apply: false\n  protected_paths: .github/workflows,.env,infra,deploy\n  allowed_roles: ImplementationAgent,BuilderAgent,FrontendAgent,BackendAgent,DatabaseAgent,TestingAgent,DevOpsAgent,DocumentationAgent\n"""
