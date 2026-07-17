@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .ast_graph import build_knowledge_graph
+from .knowledge_graph import build_project_graph, write_graph_artifacts
 from .config import load_config
-from .models import CheckStatus, FinalStatus, ProofReport
+from .models import CheckStatus, CommandSpec, FinalStatus, GeneratedArtifact, ProofReport
 from .mutation import run_mutation_sample
 from .patches import build_fix_suggestions, write_patch_artifacts
 from .runner import CommandExecutor
@@ -112,6 +112,13 @@ def verify_repo(
 
     started_at = _now()
     config = load_config(repo_path)
+    graph_store = output_dir / "knowledge-graph.sqlite3" if output_dir else None
+    graph_exclude = sorted(set(config.scan_exclude + config.graph_exclude))
+    graph = build_project_graph(
+        repo_path,
+        store_path=graph_store,
+        excluded_paths=graph_exclude,
+    )
     sandbox_requested = sandbox_override or config.sandbox or "auto"
     executor = CommandExecutor(
         sandbox=sandbox_requested,
@@ -137,14 +144,21 @@ def verify_repo(
                 excluded_paths=config.scan_exclude,
             )
 
-        graph = build_knowledge_graph(workspace.path, excluded_paths=config.scan_exclude)
         test_spec = config.command_by_name("test")
+        mutation_spec = test_spec
+        if config.mutation_test_command:
+            mutation_spec = CommandSpec(
+                name="mutation_test",
+                command=config.mutation_test_command,
+                required=True,
+                timeout_seconds=test_spec.timeout_seconds if test_spec else 600,
+            )
         tests_passed = any(check.name == "test" and check.status == CheckStatus.PASS for check in checks)
         mutations = []
         if config.mutation_sample and tests_passed:
             mutations = run_mutation_sample(
                 workspace.path,
-                test_spec,
+                mutation_spec,
                 executor=executor,
                 max_mutations=config.mutation_max,
                 include_paths=config.mutation_include,
@@ -177,8 +191,22 @@ def verify_repo(
 
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
+        graph_paths = write_graph_artifacts(graph, output_dir)
+        graph_artifacts = [
+            GeneratedArtifact("Project Graph JSON", str(graph_paths[0]), "Machine-readable AST-anchored project graph"),
+            GeneratedArtifact("Project Graph Markdown", str(graph_paths[1]), "Human-readable project graph summary"),
+            GeneratedArtifact("Graph Manifest", str(graph_paths[2]), "File hashes and project-state freshness evidence"),
+        ]
+        if graph_store:
+            graph_artifacts.append(
+                GeneratedArtifact(
+                    "Knowledge Graph SQLite",
+                    str(graph_store),
+                    "Persistent relational graph store for files, symbols, edges, features, and tests",
+                )
+            )
         patch_artifacts = write_patch_artifacts(report, output_dir)
-        report.artifacts.extend(patch_artifacts)
+        report.artifacts.extend(graph_artifacts + patch_artifacts)
         report.patch_plan_path = next((artifact.path for artifact in patch_artifacts if artifact.name == "Patch Plan"), None)
 
     return report

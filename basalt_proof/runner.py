@@ -4,6 +4,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -184,45 +185,53 @@ class CommandExecutor:
         deps_path = str(cwd / ".basalt-deps")
         existing_pythonpath = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = deps_path + (os.pathsep + existing_pythonpath if existing_pythonpath else "")
-        try:
-            completed = subprocess.run(
-                spec.command,
-                cwd=str(cwd),
-                shell=True,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=spec.timeout_seconds,
-                env=env,
-            )
-            duration_ms = int((time.perf_counter() - started) * 1000)
-            message = "Command passed." if completed.returncode == 0 else "Command failed."
-            if self.effective_sandbox == "temp-fallback" and self.fallback_reason:
-                message += f" Docker was unavailable; safe temp fallback used ({self.fallback_reason})."
-            return CommandResult(
-                name=spec.name,
-                command=spec.command,
-                status=CheckStatus.PASS if completed.returncode == 0 else CheckStatus.FAIL,
-                exit_code=completed.returncode,
-                duration_ms=duration_ms,
-                stdout_tail=_tail(completed.stdout),
-                stderr_tail=_tail(completed.stderr),
-                message=message,
-                sandbox=self.effective_sandbox,
-            )
-        except subprocess.TimeoutExpired as exc:
-            duration_ms = int((time.perf_counter() - started) * 1000)
-            return CommandResult(
-                name=spec.name,
-                command=spec.command,
-                status=CheckStatus.FAIL,
-                exit_code=None,
-                duration_ms=duration_ms,
-                stdout_tail=_tail(exc.stdout),
-                stderr_tail=_tail(exc.stderr),
-                message=f"Command timed out after {spec.timeout_seconds}s.",
-                sandbox=self.effective_sandbox,
-            )
+        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+            try:
+                completed = subprocess.run(
+                    shlex.split(spec.command),
+                    cwd=str(cwd),
+                    shell=False,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    timeout=spec.timeout_seconds,
+                    env=env,
+                )
+                duration_ms = int((time.perf_counter() - started) * 1000)
+                stdout_file.seek(0)
+                stderr_file.seek(0)
+                stdout_text = stdout_file.read().decode("utf-8", errors="replace")
+                stderr_text = stderr_file.read().decode("utf-8", errors="replace")
+                message = "Command passed." if completed.returncode == 0 else "Command failed."
+                if self.effective_sandbox == "temp-fallback" and self.fallback_reason:
+                    message += f" Docker was unavailable; safe temp fallback used ({self.fallback_reason})."
+                return CommandResult(
+                    name=spec.name,
+                    command=spec.command,
+                    status=CheckStatus.PASS if completed.returncode == 0 else CheckStatus.FAIL,
+                    exit_code=completed.returncode,
+                    duration_ms=duration_ms,
+                    stdout_tail=_tail(stdout_text),
+                    stderr_tail=_tail(stderr_text),
+                    message=message,
+                    sandbox=self.effective_sandbox,
+                )
+            except subprocess.TimeoutExpired:
+                duration_ms = int((time.perf_counter() - started) * 1000)
+                stdout_file.seek(0)
+                stderr_file.seek(0)
+                stdout_text = stdout_file.read().decode("utf-8", errors="replace")
+                stderr_text = stderr_file.read().decode("utf-8", errors="replace")
+                return CommandResult(
+                    name=spec.name,
+                    command=spec.command,
+                    status=CheckStatus.FAIL,
+                    exit_code=None,
+                    duration_ms=duration_ms,
+                    stdout_tail=_tail(stdout_text),
+                    stderr_tail=_tail(stderr_text),
+                    message=f"Command timed out after {spec.timeout_seconds}s.",
+                    sandbox=self.effective_sandbox,
+                )
 
     def _network_for(self, spec: CommandSpec) -> str:
         if self.docker_network == "full":

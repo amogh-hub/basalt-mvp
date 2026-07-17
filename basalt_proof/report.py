@@ -116,12 +116,20 @@ def render_markdown(report: ProofReport) -> str:
         lines.append("Mutation testing did not run or no mutation candidates were found.")
     lines.append("")
 
-    lines.append("## AST-Anchored Graph Preview")
+    lines.append("## AST-Anchored Project Knowledge Graph")
     lines.append("")
+    lines.append(f"- Graph version: `{report.knowledge_graph.graph_version}`")
+    lines.append(f"- Parser version: `{report.knowledge_graph.parser_version}`")
+    lines.append(f"- Project state hash: `{report.knowledge_graph.state_hash}`")
+    lines.append(f"- Fresh: `{report.knowledge_graph.fresh}`")
     lines.append(f"- Files scanned: {report.knowledge_graph.files_scanned}")
     lines.append(f"- Symbols found: {len(report.knowledge_graph.symbols)}")
     lines.append(f"- Edges found: {len(report.knowledge_graph.edges)}")
     lines.append(f"- Test files found: {len(report.knowledge_graph.test_files)}")
+    lines.append(f"- Test mappings: {len(report.knowledge_graph.test_mappings)}")
+    lines.append(f"- Features mapped: {len(report.knowledge_graph.features)}")
+    lines.append(f"- API routes: {len(report.knowledge_graph.routes)}")
+    lines.append(f"- Database schemas: {len(report.knowledge_graph.schemas)}")
     if report.knowledge_graph.languages:
         lines.append(
             "- Languages: "
@@ -131,7 +139,18 @@ def render_markdown(report: ProofReport) -> str:
         lines.append("")
         lines.append("Top symbols:")
         for symbol in report.knowledge_graph.symbols[:12]:
-            lines.append(f"- `{symbol.kind}` `{symbol.name}` in `{symbol.file}:{symbol.line}`")
+            lines.append(
+                f"- `{symbol.kind}` `{symbol.qualified_name or symbol.name}` "
+                f"in `{symbol.file}:{symbol.line}`"
+            )
+    if report.knowledge_graph.features:
+        lines.append("")
+        lines.append("Top feature mappings:")
+        for feature in report.knowledge_graph.features[:10]:
+            lines.append(
+                f"- **{feature.name}** — {len(feature.files)} files, "
+                f"{len(feature.tests)} tests (`{feature.source}`)"
+            )
     lines.append("")
 
     if report.risks:

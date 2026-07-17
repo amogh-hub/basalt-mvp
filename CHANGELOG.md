@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.1.0-alpha.1 — Phase 2 Knowledge Platform
+
+### Added
+
+- Persistent SQLite-backed AST-Anchored Project Knowledge Graph
+- Deterministic file hashes, parser versioning, and project state hashes
+- Python AST extraction for functions, classes, signatures, calls, inheritance, and API routes
+- JavaScript/TypeScript extraction for imports, functions, components, classes, interfaces, types, Express routes, and Next.js route handlers
+- SQL schema and reference extraction
+- File, symbol, dependency, route, schema, feature, and test-mapping graph entities
+- Explicit feature maps through `basalt.features.json`
+- Graph freshness detection for changed, new, removed, and reused files
+- Automatic graph refresh and stale-graph fail-closed mode
+- Reverse-dependency change-impact analysis
+- Task-specific Context Compiler with role, task, target, feature, test, and dependency scoring
+- Token-budgeted context packs with context precision metrics
+- Versioned and latest context-pack JSON/Markdown artifacts
+- New CLI commands: `basalt graph build`, `basalt graph status`, `basalt graph query`, `basalt impact`, and `basalt context`
+- Knowledge graph artifacts in every proof run: SQLite database, graph manifest, JSON, and Markdown
+- 21 Phase 2 tests, bringing the complete suite to 51 tests
+- Phase 2 architecture, validation, completion, release, and handoff documentation
+
+### Changed
+
+- Package version upgraded from 2.0.0a1 to 2.1.0a1
+- Basalt product identity updated to the v2.1 Alpha Knowledge Platform
+- The former AST preview now uses the persistent Phase 2 graph engine
+- Proof reports and the Command Center now include graph state, features, routes, schemas, and test mappings
+- Mutation self-verification uses a targeted proof test while the normal proof gate still runs the full suite
+- GitHub Actions now validates graph build, freshness, impact analysis, and context compilation
+
+### Preserved
+
+- All Phase 1 sandbox, security, dependency, mutation, scoring, CI, dashboard, and proof-artifact capabilities
+
 ## 2.0.0-alpha.1 — Phase 1 Alpha Proof Platform
 
 ### Added

@@ -11,15 +11,25 @@ from . import __version__
 from .autofix import write_fix_bundle
 from .compare import write_before_after_artifacts
 from .config import infer_commands, infer_project_type, load_config, render_default_config
+from .context_compiler import compile_context_for_repo
 from .dashboard import write_dashboard
 from .git_pr import write_pr_pack
+from .knowledge_graph import (
+    GraphStore,
+    analyze_impact,
+    build_project_graph,
+    check_graph_freshness,
+    query_graph,
+    render_impact_markdown,
+    write_graph_artifacts,
+)
 from .models import GeneratedArtifact
 from .proof import verify_repo
 from .report import write_json_report, write_markdown_report
 from .runner import docker_status
 
 
-PRODUCT_NAME = "Basalt v2.0 Alpha Proof Platform"
+PRODUCT_NAME = "Basalt v2.1 Alpha Knowledge Platform"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -80,6 +90,42 @@ def build_parser() -> argparse.ArgumentParser:
 
     explain = subparsers.add_parser("explain", help="Summarize an existing proof-report.json")
     explain.add_argument("report", type=Path)
+
+    graph = subparsers.add_parser("graph", help="Build, inspect, and query the AST-anchored Project Knowledge Graph")
+    graph_commands = graph.add_subparsers(dest="graph_command")
+    graph_build = graph_commands.add_parser("build", help="Build or refresh the persistent project graph")
+    graph_build.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    graph_build.add_argument("--out", type=Path, default=None)
+    graph_build.add_argument("--force", action="store_true")
+    graph_build.add_argument("--json", action="store_true")
+    graph_status = graph_commands.add_parser("status", help="Check graph freshness against current files")
+    graph_status.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    graph_status.add_argument("--out", type=Path, default=None)
+    graph_status.add_argument("--json", action="store_true")
+    graph_query = graph_commands.add_parser("query", help="Search files, symbols, and features")
+    graph_query.add_argument("repo", type=Path)
+    graph_query.add_argument("term")
+    graph_query.add_argument("--kind", default=None)
+    graph_query.add_argument("--limit", type=int, default=50)
+    graph_query.add_argument("--out", type=Path, default=None)
+    graph_query.add_argument("--json", action="store_true")
+
+    impact = subparsers.add_parser("impact", help="Analyze downstream impact of a file, symbol, route, or feature")
+    impact.add_argument("repo", type=Path)
+    impact.add_argument("target")
+    impact.add_argument("--depth", type=int, default=3)
+    impact.add_argument("--out", type=Path, default=None)
+    impact.add_argument("--json", action="store_true")
+
+    context = subparsers.add_parser("context", help="Compile a minimal task-specific context pack")
+    context.add_argument("repo", type=Path)
+    context.add_argument("--task", required=True)
+    context.add_argument("--role", default="CodeReviewAgent")
+    context.add_argument("--target", action="append", default=[])
+    context.add_argument("--budget", type=int, default=None)
+    context.add_argument("--out", type=Path, default=None)
+    context.add_argument("--no-refresh", action="store_true")
+    context.add_argument("--json", action="store_true")
     return parser
 
 
@@ -307,6 +353,13 @@ def run_inspect(args: argparse.Namespace) -> int:
             "network": config.docker_network,
             "fallback_to_temp": config.docker_fallback,
         },
+        "knowledge_graph": {
+            "auto_refresh": config.graph_auto_refresh,
+            "exclude": config.graph_exclude,
+        },
+        "context": {
+            "token_budget": config.context_token_budget,
+        },
     }
     if args.json:
         print(json.dumps(data, indent=2))
@@ -320,6 +373,156 @@ def run_inspect(args: argparse.Namespace) -> int:
         print("- commands:")
         for name, details in data["configured_commands"].items():
             print(f"  - {name}: {details['command'] or 'not configured'} (required={details['required']})")
+    return 0
+
+
+def _graph_paths(repo: Path, out: Path | None) -> tuple[Path, Path]:
+    output_dir = out.resolve() if out else repo / ".basalt"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir, output_dir / "knowledge-graph.sqlite3"
+
+
+def run_graph(args: argparse.Namespace) -> int:
+    if not args.graph_command:
+        print("Choose one of: build, status, query", file=sys.stderr)
+        return 2
+    repo = args.repo.resolve()
+    output_dir, store_path = _graph_paths(repo, args.out)
+    config = load_config(repo)
+    graph_exclude = sorted(set(config.scan_exclude + config.graph_exclude))
+    if args.graph_command == "build":
+        graph = build_project_graph(
+            repo,
+            store_path=store_path,
+            excluded_paths=graph_exclude,
+            force=args.force,
+        )
+        artifacts = write_graph_artifacts(graph, output_dir)
+        data = {
+            "state_hash": graph.state_hash,
+            "fresh": graph.fresh,
+            "files": graph.files_scanned,
+            "symbols": len(graph.symbols),
+            "edges": len(graph.edges),
+            "features": len(graph.features),
+            "test_mappings": len(graph.test_mappings),
+            "routes": len(graph.routes),
+            "schemas": len(graph.schemas),
+            "changed_files": graph.changed_files,
+            "reused_files": graph.reused_files,
+            "removed_files": graph.removed_files,
+            "store": str(store_path),
+            "artifacts": [str(item) for item in artifacts],
+        }
+        if args.json:
+            print(json.dumps(data, indent=2))
+        else:
+            print("Basalt Project Knowledge Graph")
+            print(f"- state: {graph.state_hash}")
+            print(f"- files: {graph.files_scanned}")
+            print(f"- symbols: {len(graph.symbols)}")
+            print(f"- edges: {len(graph.edges)}")
+            print(f"- features: {len(graph.features)}")
+            print(f"- test mappings: {len(graph.test_mappings)}")
+            print(f"- changed/new: {len(graph.changed_files)}")
+            print(f"- unchanged: {len(graph.reused_files)}")
+            print(f"- store: {store_path}")
+        return 0
+    if args.graph_command == "status":
+        freshness = check_graph_freshness(repo, store_path, graph_exclude)
+        data = {
+            "fresh": freshness.fresh,
+            "reason": freshness.reason,
+            "current_state_hash": freshness.current_state_hash,
+            "stored_state_hash": freshness.stored_state_hash,
+            "changed_files": freshness.changed_files,
+            "new_files": freshness.new_files,
+            "removed_files": freshness.removed_files,
+        }
+        if args.json:
+            print(json.dumps(data, indent=2))
+        else:
+            print("Basalt Graph Freshness")
+            print(f"- fresh: {freshness.fresh}")
+            print(f"- reason: {freshness.reason}")
+            print(f"- changed: {len(freshness.changed_files)}")
+            print(f"- new: {len(freshness.new_files)}")
+            print(f"- removed: {len(freshness.removed_files)}")
+        return 0 if freshness.fresh else 1
+    graph = build_project_graph(repo, store_path, graph_exclude)
+    write_graph_artifacts(graph, output_dir)
+    result = query_graph(graph, args.term, kind=args.kind, limit=max(1, args.limit))
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"Basalt Graph Query: {args.term}")
+        for item in result["symbols"]:
+            print(f"- symbol {item['kind']} {item['qualified_name'] or item['name']} @ {item['file']}:{item['line']}")
+        for item in result["files"]:
+            print(f"- file {item['path']} ({item['language']})")
+        for item in result["features"]:
+            print(f"- feature {item['name']} ({item['source']})")
+    return 0
+
+
+def run_impact(args: argparse.Namespace) -> int:
+    repo = args.repo.resolve()
+    output_dir, store_path = _graph_paths(repo, args.out)
+    config = load_config(repo)
+    graph_exclude = sorted(set(config.scan_exclude + config.graph_exclude))
+    graph = build_project_graph(repo, store_path, graph_exclude)
+    result = analyze_impact(graph, args.target, depth=max(0, args.depth))
+    json_path = output_dir / "impact-analysis.json"
+    md_path = output_dir / "impact-analysis.md"
+    json_path.write_text(json.dumps(result.__dict__, indent=2, sort_keys=True), encoding="utf-8")
+    md_path.write_text(render_impact_markdown(result), encoding="utf-8")
+    if args.json:
+        print(json.dumps(result.__dict__, indent=2))
+    else:
+        print("Basalt Change Impact Analysis")
+        print(f"- target: {result.target}")
+        print(f"- found: {result.found}")
+        print(f"- risk: {result.risk_level}")
+        print(f"- files: {len(result.impacted_files)}")
+        print(f"- tests: {len(result.impacted_tests)}")
+        print(f"- features: {len(result.impacted_features)}")
+        print(f"- report: {md_path}")
+    return 0 if result.found else 1
+
+
+def run_context(args: argparse.Namespace) -> int:
+    repo = args.repo.resolve()
+    output_dir = args.out.resolve() if args.out else repo / ".basalt"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    config = load_config(repo)
+    graph_exclude = sorted(set(config.scan_exclude + config.graph_exclude))
+    budget = args.budget if args.budget is not None else config.context_token_budget
+    try:
+        pack, artifacts = compile_context_for_repo(
+            repo,
+            output_dir,
+            task=args.task,
+            agent_role=args.role,
+            targets=args.target,
+            token_budget=max(500, budget),
+            excluded_paths=graph_exclude,
+            refresh=(not args.no_refresh) and config.graph_auto_refresh,
+        )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(pack.__dict__, indent=2))
+    else:
+        print("Basalt Context Compiler")
+        print(f"- context pack: {pack.context_pack_id}")
+        print(f"- state: {pack.project_state_hash}")
+        print(f"- task type: {pack.task_type}")
+        print(f"- role: {pack.agent_role}")
+        print(f"- selected files: {len(pack.files)}")
+        print(f"- estimated tokens: {pack.estimated_tokens}/{pack.token_budget}")
+        print(f"- context precision: {pack.context_precision_score:.4f}")
+        print(f"- artifact: {artifacts[2]}")
     return 0
 
 
@@ -376,6 +579,9 @@ def main(argv: list[str] | None = None) -> int:
         "demo": run_demo,
         "doctor": run_doctor,
         "explain": run_explain,
+        "graph": run_graph,
+        "impact": run_impact,
+        "context": run_context,
     }
     handler = handlers.get(args.command)
     if handler:

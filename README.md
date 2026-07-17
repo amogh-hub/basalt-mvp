@@ -1,69 +1,142 @@
-# Basalt v2.0 Alpha Proof Platform
+# Basalt v2.1 Alpha Knowledge Platform
 
-**Version:** `2.0.0a1`
+**Version:** `2.1.0a1`
 
-Basalt is a proof-first, prevention-first AI software platform. The Phase 1 alpha verifies real repositories, challenges test suites with mutation testing, scans security and dependency risk, runs checks in an isolated sandbox, and produces PR-ready evidence.
+Basalt is a proof-first, prevention-first AI software platform. Phase 2 adds a persistent AST-anchored Project Knowledge Graph and a Context Compiler that selects the smallest useful context for a task instead of sending an entire repository to an AI model.
 
 > **Core promise:** Verified software, not vibes.
 
-This is the official **Phase 1 — Alpha Proof Platform**. It is not yet the full autonomous AI Software Factory described in the Founder Vision.
+This is the official **Phase 2 — Project Knowledge Graph + Context Compiler** alpha. Basalt now understands repository structure and can compile focused engineering context, but it is not yet the full autonomous AI Software Factory.
 
-## What Phase 1 includes
+## Phase 2 capabilities
 
-- Automatic project detection for Python, FastAPI, Node, React, Vite, and Next.js
-- `basalt inspect` for detected commands and sandbox policy
-- Docker-preferred `auto` sandbox with safe temporary-workspace fallback
-- Install-only network policy for dependency installation; checks run with network disabled
-- Command allowlist and fail-closed Docker option
-- Build, lint, type-check, and test execution
-- Multi-candidate deterministic mutation testing
-- Secret, auth-risk, destructive SQL, workflow-permission, dependency, and maintainability scanning
-- AST-anchored source, symbol, import, test-file, and language preview
-- Transparent proof-score breakdown
-- `VERIFIED`, `WEAK_PROOF`, `NOT_VERIFIED`, `NEEDS_HUMAN_REVIEW`, and `BLOCKED_BY_POLICY` verdicts
-- Auto proof-hardening fixes for supported Python and JavaScript boundary cases
-- Markdown, JSON, dashboard, patch-plan, and PR-description artifacts
-- GitHub Actions proof gate with downloadable evidence
-- Python 3.11 and 3.13 CI coverage
+- Persistent SQLite Project Knowledge Graph
+- File hashes and project-state fingerprints
+- Python AST extraction for functions, classes, signatures, decorators, calls, inheritance, and API routes
+- Deterministic JavaScript/TypeScript extraction for functions, components, classes, imports, and routes
+- SQL table, view, and foreign-reference extraction
+- Resolved local import graph
+- Symbol-level call and containment graph
+- File-to-test mappings using imports and naming evidence
+- Explicit and inferred feature-to-file maps
+- Change-impact analysis across files, symbols, tests, features, routes, and schemas
+- Graph freshness checks for changed, new, and removed files
+- Automatic stale-graph refresh before context compilation
+- Task classification and role-aware context selection
+- Token-budgeted context packs with source snippets and selection reasons
+- Context precision score
+- JSON, Markdown, SQLite, manifest, dashboard, and PR-ready proof artifacts
+- All Phase 1 proof, mutation, security, dependency, sandbox, and CI capabilities
 
 ## Install
 
 ```bash
-cd basalt-mvp-v1.5-full
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install -e .
 ```
 
-## First run
+## Core workflow
 
 ```bash
 basalt doctor
 basalt inspect .
+basalt graph build .
+basalt graph status .
+basalt graph query . login
+basalt impact . basalt_proof/knowledge_graph.py
+basalt context . \
+  --task "Fix stale graph detection" \
+  --role CodeReviewAgent \
+  --target basalt_proof/knowledge_graph.py
 basalt verify .
-open .basalt/basalt-dashboard.html
 ```
 
-When Docker is installed and running, `sandbox.mode: auto` uses Docker. When Docker is unavailable and `fallback_to_temp: true`, Basalt uses an isolated temporary copy and records the fallback in the proof report.
-
-## Core commands
+## Project Knowledge Graph commands
 
 ```bash
-basalt init /path/to/repo
-basalt inspect /path/to/repo
-basalt verify /path/to/repo
-basalt fix /path/to/repo --apply --rerun
-basalt pr /path/to/repo
-basalt explain /path/to/repo/.basalt/proof-report.json
-basalt demo
+# Build or refresh the persistent graph
+basalt graph build /path/to/repo
+
+# Check whether the stored graph matches current file hashes
+basalt graph status /path/to/repo
+
+# Search files, symbols, and features
+basalt graph query /path/to/repo auth
+basalt graph query /path/to/repo login_user --kind function
+
+# Analyze downstream change impact
+basalt impact /path/to/repo app/auth.py
+basalt impact /path/to/repo login_user --depth 4
 ```
 
-## Proof artifacts
+## Context Compiler
 
-Each run can generate:
+```bash
+basalt context /path/to/repo \
+  --task "Fix the login redirect bug" \
+  --role FrontendAgent \
+  --target src/LoginPage.tsx \
+  --budget 12000
+```
+
+The generated context pack contains:
+
+- project state hash and freshness proof;
+- selected files and source snippets;
+- relevant symbols and signatures;
+- mapped tests and features;
+- routes, schemas, and dependencies;
+- policy constraints;
+- deterministic selection reasons;
+- estimated token usage and context precision.
+
+## Explicit feature mapping
+
+Basalt can infer features from paths and symbol names. For stronger product truth, add `basalt.features.json`:
+
+```json
+{
+  "features": [
+    {
+      "id": "login",
+      "name": "Login",
+      "description": "User authentication and session creation",
+      "keywords": ["auth", "login", "session"],
+      "files": ["app/auth.py", "frontend/LoginPage.tsx"],
+      "tests": ["tests/test_auth.py"]
+    }
+  ]
+}
+```
+
+## Configuration
+
+```yaml
+knowledge_graph:
+  auto_refresh: true
+  exclude: examples,dist,build
+
+context:
+  token_budget: 12000
+```
+
+`auto_refresh: true` prevents agents from receiving stale code truth. With automatic refresh disabled, context compilation fails closed until the graph is rebuilt.
+
+## Generated artifacts
 
 ```text
+.basalt/knowledge-graph.sqlite3
+.basalt/project-graph.json
+.basalt/project-graph.md
+.basalt/graph-manifest.json
+.basalt/impact-analysis.json
+.basalt/impact-analysis.md
+.basalt/context-pack.json
+.basalt/context-pack.md
+.basalt/context-packs/<context-id>.json
+.basalt/context-packs/<context-id>.md
 .basalt/proof-report.json
 .basalt/proof-report.md
 .basalt/basalt-dashboard.html
@@ -71,58 +144,26 @@ Each run can generate:
 .basalt/github-pr-description.md
 ```
 
-## GitHub Actions
+## Validation
 
-The included workflow:
-
-- runs unit tests on Python 3.11 and 3.13;
-- runs Basalt verification;
-- enforces a `VERIFIED` verdict;
-- writes a GitHub job summary;
-- uploads the full `.basalt/` evidence directory.
-
-## Built-in alpha demo
-
-```bash
-basalt demo
-```
-
-Expected proof story:
-
-- `demo_good` → `VERIFIED`
-- `demo_weak` → `WEAK_PROOF`
-- auto proof-hardening → `VERIFIED`
-- `demo_node_weak` → `WEAK_PROOF`, then `VERIFIED`
-- `demo_policy_violation` → `BLOCKED_BY_POLICY`
-
-## Configuration
-
-Create a starter configuration:
-
-```bash
-basalt init . --force
-```
-
-Important sandbox settings:
-
-```yaml
-sandbox:
-  mode: auto
-  docker_image: python:3.13-slim
-  network: install-only
-  fallback_to_temp: true
-```
-
-Use `fallback_to_temp: false` when Docker isolation is mandatory and verification must fail closed if Docker is unavailable.
+- `51` automated tests
+- Self-verification: `VERIFIED 98/100`
+- Mutation: killed
+- Non-low self-findings: none
+- Persistent graph verified through SQLite table assertions
+- Freshness tested for changed, new, and removed files
+- Python, JavaScript/TypeScript, and SQL graph extraction tested
+- Context budgets and role prioritization tested
+- Impact and CLI integration tested
 
 ## Current boundary
 
-Phase 1 is a serious alpha proof platform. It does not yet include the Product Brain, full Project Knowledge Graph, Context Compiler, governed multi-agent engineering, deployment orchestration, or continuous maintenance system. Those belong to later official Basalt phases.
+Phase 2 gives Basalt deterministic codebase understanding and focused context. It does not yet allow autonomous agents to apply production-code fixes. That belongs to **Phase 3 — Agent-Assisted Safe Fixes**, where Testing, Security, Review, and limited implementation agents will propose governed patches through the Policy Kernel and human approval gates.
 
 See:
 
-- `docs/ALPHA_V2.md`
-- `docs/REAL_REPO_GUIDE.md`
-- `docs/SECURITY_AND_SANDBOX.md`
-- `docs/VALIDATION_REPORT.md`
-- `docs/PHASE1_COMPLETION.md`
+- `docs/PROJECT_KNOWLEDGE_GRAPH.md`
+- `docs/CONTEXT_COMPILER.md`
+- `docs/PHASE2_COMPLETION.md`
+- `docs/PHASE2_VALIDATION_REPORT.md`
+- `PHASE2_HANDOFF.md`
