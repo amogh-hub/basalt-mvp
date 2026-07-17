@@ -14,10 +14,12 @@ proof:
   require_tests: true
   mutation_sample: true
   mutation_max: 1
+  mutation_per_file: 2
   mutation_include: basalt_proof/proof.py
   mutation_exclude: examples,basalt-demo-run
   security_scan: basic
   scan_exclude: examples/demo_policy_violation,basalt-demo-run
+  min_verified_score: 80
   dashboard: true
   patch_plan: true
   pr_pack: true
@@ -26,5 +28,7 @@ policy:
   block_destructive_migrations: true
   require_human_approval_for_deploy: true
 sandbox:
-  mode: temp
-  docker_image: null
+  mode: auto
+  docker_image: python:3.13-slim
+  network: install-only
+  fallback_to_temp: true

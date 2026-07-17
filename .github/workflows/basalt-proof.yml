@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - phase-1-v2-alpha
+      - main
   pull_request:
     branches:
       - main
@@ -12,15 +13,52 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: basalt-proof-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  proof:
-    name: Basalt Proof Gate
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
 
     steps:
       - name: Download repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Compile source
+        run: python -m compileall basalt_proof tests
+
+  proof:
+    name: Basalt Proof Gate
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    timeout-minutes: 20
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -29,17 +67,12 @@ jobs:
 
       - name: Install Basalt
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .
-
-      - name: Run Basalt tests
-        run: |
-          python -m unittest discover -s tests -v
 
       - name: Run Basalt verification
         continue-on-error: true
-        run: |
-          basalt verify .
+        run: basalt verify .
 
       - name: Enforce VERIFIED verdict
         if: always()
@@ -51,53 +84,41 @@ jobs:
           from pathlib import Path
 
           report_path = Path(".basalt/proof-report.json")
-
           if not report_path.exists():
               print("ERROR: Basalt did not generate a proof report.")
               sys.exit(1)
 
-          report = json.loads(
-              report_path.read_text(encoding="utf-8")
-          )
-
+          report = json.loads(report_path.read_text(encoding="utf-8"))
           status = report.get("final_status", "UNKNOWN")
           score = report.get("score", 0)
+          sandbox = report.get("sandbox", "unknown")
           mutations = report.get("mutations", [])
           findings = report.get("security_findings", [])
-
-          survived = sum(
-              1 for mutation in mutations
-              if mutation.get("survived") is True
-          )
-
+          survived = sum(1 for item in mutations if item.get("survived") is True)
           high_findings = sum(
-              1 for finding in findings
-              if str(finding.get("level", "")).upper() == "HIGH"
+              1 for item in findings
+              if str(item.get("level", "")).upper() == "HIGH"
           )
 
           print(f"Basalt verdict: {status}")
           print(f"Proof score: {score}/100")
+          print(f"Sandbox: {sandbox}")
           print(f"Survived mutations: {survived}")
           print(f"High findings: {high_findings}")
 
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-
           if summary_path:
               with open(summary_path, "a", encoding="utf-8") as summary:
-                  summary.write("# Basalt Proof Report\n\n")
+                  summary.write("# Basalt v2.0 Alpha Proof Report\n\n")
                   summary.write(f"- **Verdict:** `{status}`\n")
                   summary.write(f"- **Proof score:** `{score}/100`\n")
-                  summary.write(
-                      f"- **Survived mutations:** `{survived}`\n"
-                  )
-                  summary.write(
-                      f"- **High findings:** `{high_findings}`\n"
-                  )
+                  summary.write(f"- **Sandbox:** `{sandbox}`\n")
+                  summary.write(f"- **Survived mutations:** `{survived}`\n")
+                  summary.write(f"- **High findings:** `{high_findings}`\n")
 
           if status != "VERIFIED":
-              print("ERROR: Repository is not VERIFIED.")
+              print(f"ERROR: Repository verdict is {status}, not VERIFIED.")
               sys.exit(1)
-
           print("Basalt Proof Gate passed.")
           PY
 
@@ -105,7 +126,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: basalt-proof-${{ github.run_number }}
+          name: basalt-proof-${{ github.run_number }}-${{ github.run_attempt }}
           path: .basalt/
           include-hidden-files: true
           if-no-files-found: error

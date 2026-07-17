@@ -154,7 +154,7 @@ class PatchSuggestionTests(unittest.TestCase):
         suggestion = next(
             item
             for item in suggestions
-            if item.title == "Review security warning: long_line_complexity"
+            if item.title == "Optional cleanup: long_line_complexity"
         )
 
         self.assertEqual(suggestion.severity, "LOW")
