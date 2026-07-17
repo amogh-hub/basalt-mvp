@@ -21,6 +21,31 @@ class FinalStatus(str, Enum):
     BLOCKED_BY_POLICY = "BLOCKED_BY_POLICY"
 
 
+class PolicyVerdict(str, Enum):
+    ALLOW = "ALLOW"
+    REQUIRE_HUMAN_APPROVAL = "REQUIRE_HUMAN_APPROVAL"
+    BLOCK = "BLOCK"
+
+
+class AgentRunStatus(str, Enum):
+    PLANNED = "PLANNED"
+    CONTEXT_COMPILED = "CONTEXT_COMPILED"
+    PATCH_PROPOSED = "PATCH_PROPOSED"
+    POLICY_CHECKED = "POLICY_CHECKED"
+    AWAITING_APPROVAL = "AWAITING_APPROVAL"
+    APPROVED = "APPROVED"
+    APPLYING = "APPLYING"
+    VERIFYING = "VERIFYING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+    BLOCKED_BY_POLICY = "BLOCKED_BY_POLICY"
+    NOT_VERIFIED = "NOT_VERIFIED"
+    ROLLED_BACK = "ROLLED_BACK"
+    STALE_STATE = "STALE_STATE"
+    STUCK = "STUCK"
+    FAILED = "FAILED"
+
+
 @dataclass
 class CommandSpec:
     name: str
@@ -214,6 +239,133 @@ class GeneratedArtifact:
 
 
 @dataclass
+class PatchHunk:
+    old_start: int
+    old_count: int
+    new_start: int
+    new_count: int
+    lines: list[str] = field(default_factory=list)
+
+
+@dataclass
+class PatchFileChange:
+    old_path: str
+    new_path: str
+    change_type: str
+    hunks: list[PatchHunk] = field(default_factory=list)
+    additions: int = 0
+    deletions: int = 0
+
+
+@dataclass
+class PatchStats:
+    files_changed: int = 0
+    additions: int = 0
+    deletions: int = 0
+    changed_lines: int = 0
+    paths: list[str] = field(default_factory=list)
+    test_only: bool = False
+    contains_binary: bool = False
+
+
+@dataclass
+class PolicyDecision:
+    verdict: PolicyVerdict
+    risk_level: str
+    reasons: list[str] = field(default_factory=list)
+    risk_flags: list[str] = field(default_factory=list)
+    required_approvals: list[str] = field(default_factory=list)
+    required_locks: list[str] = field(default_factory=list)
+    allowed_tools: list[str] = field(default_factory=list)
+    denied_capabilities: list[str] = field(default_factory=list)
+    patch_stats: PatchStats = field(default_factory=PatchStats)
+
+
+@dataclass
+class AgentAction:
+    agent_role: str
+    action: str
+    status: str
+    summary: str
+    started_at: str
+    finished_at: str
+    tools_used: list[str] = field(default_factory=list)
+    artifacts: list[str] = field(default_factory=list)
+    risk_flags: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ApprovalRecord:
+    required: bool
+    approved: bool = False
+    actor: str = ""
+    reason: str = ""
+    approved_at: str = ""
+    token_hash: str = ""
+    token_used: bool = False
+    rejected: bool = False
+    rejected_at: str = ""
+
+
+@dataclass
+class VerificationDelta:
+    before_status: str
+    after_status: str
+    before_score: int
+    after_score: int
+    score_delta: int
+    before_survived_mutations: int
+    after_survived_mutations: int
+    before_high_findings: int
+    after_high_findings: int
+    before_failed_checks: int
+    after_failed_checks: int
+    improved: bool
+    accepted: bool
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
+class AgentRun:
+    run_id: str
+    task: str
+    agent_role: str
+    repo_path: str
+    created_at: str
+    updated_at: str
+    status: AgentRunStatus
+    base_state_hash: str
+    current_state_hash: str = ""
+    context_pack_id: str = ""
+    targets: list[str] = field(default_factory=list)
+    candidate_patch_path: str = ""
+    proposal_source: str = ""
+    attempt: int = 1
+    max_attempts: int = 3
+    patch_hashes: list[str] = field(default_factory=list)
+    policy_decision: PolicyDecision | None = None
+    approval: ApprovalRecord | None = None
+    agent_actions: list[AgentAction] = field(default_factory=list)
+    impacted_files: list[str] = field(default_factory=list)
+    impacted_tests: list[str] = field(default_factory=list)
+    impacted_features: list[str] = field(default_factory=list)
+    before_report_path: str = ""
+    after_report_path: str = ""
+    verification_delta: VerificationDelta | None = None
+    backup_dir: str = ""
+    applied_files: list[str] = field(default_factory=list)
+    rollback_performed: bool = False
+    message: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["status"] = self.status.value
+        if self.policy_decision:
+            data["policy_decision"]["verdict"] = self.policy_decision.verdict.value
+        return data
+
+
+@dataclass
 class ProofReport:
     project_name: str
     repo_path: str
@@ -236,7 +388,7 @@ class ProofReport:
     evidence_dir: str | None = None
     dashboard_path: str | None = None
     patch_plan_path: str | None = None
-    basalt_version: str = "2.1.0a1"
+    basalt_version: str = "2.2.0a1"
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -280,6 +432,14 @@ class BasaltConfig:
     graph_auto_refresh: bool = True
     graph_exclude: list[str] = field(default_factory=list)
     context_token_budget: int = 12000
+    agents_enabled: bool = True
+    agent_max_files: int = 8
+    agent_max_changed_lines: int = 400
+    agent_max_attempts: int = 3
+    agent_require_human_approval_for_source: bool = True
+    agent_allow_test_only_auto_apply: bool = False
+    agent_protected_paths: list[str] = field(default_factory=list)
+    agent_allowed_roles: list[str] = field(default_factory=list)
 
     def command_by_name(self, name: str) -> CommandSpec | None:
         return next((cmd for cmd in self.commands if cmd.name == name), None)

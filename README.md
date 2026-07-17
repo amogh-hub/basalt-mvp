@@ -1,32 +1,33 @@
-# Basalt v2.1 Alpha Knowledge Platform
+# Basalt v2.2 Alpha Safe Fix Platform
 
-**Version:** `2.1.0a1`
+**Version:** `2.2.0a1`
 
-Basalt is a proof-first, prevention-first AI software platform. Phase 2 adds a persistent AST-anchored Project Knowledge Graph and a Context Compiler that selects the smallest useful context for a task instead of sending an entire repository to an AI model.
+Basalt is a proof-first, prevention-first AI software platform. Phase 3 adds governed agent-assisted fixes: agents may propose patches, but Basalt owns policy review, human approval, atomic repository mutation, sandbox verification, proof comparison, and rollback.
 
 > **Core promise:** Verified software, not vibes.
 
-This is the official **Phase 2 — Project Knowledge Graph + Context Compiler** alpha. Basalt now understands repository structure and can compile focused engineering context, but it is not yet the full autonomous AI Software Factory.
+This is the official **Phase 3 — Agent-Assisted Safe Fixes** alpha. It is a governed single-fix transaction platform, not yet the full multi-agent AI Software Factory.
 
-## Phase 2 capabilities
+## What Phase 3 adds
 
-- Persistent SQLite Project Knowledge Graph
-- File hashes and project-state fingerprints
-- Python AST extraction for functions, classes, signatures, decorators, calls, inheritance, and API routes
-- Deterministic JavaScript/TypeScript extraction for functions, components, classes, imports, and routes
-- SQL table, view, and foreign-reference extraction
-- Resolved local import graph
-- Symbol-level call and containment graph
-- File-to-test mappings using imports and naming evidence
-- Explicit and inferred feature-to-file maps
-- Change-impact analysis across files, symbols, tests, features, routes, and schemas
-- Graph freshness checks for changed, new, and removed files
-- Automatic stale-graph refresh before context compilation
-- Task classification and role-aware context selection
-- Token-budgeted context packs with source snippets and selection reasons
-- Context precision score
-- JSON, Markdown, SQLite, manifest, dashboard, and PR-ready proof artifacts
-- All Phase 1 proof, mutation, security, dependency, sandbox, and CI capabilities
+- Unified-diff patch ingestion and deterministic patch parsing
+- Safe patch preflight in an isolated repository copy
+- Path traversal, binary patch, protected path, lockfile, and stale-context rejection
+- Role-scoped capability permissions for implementation, frontend, backend, testing, database, DevOps, and documentation agents
+- Read-only Security and Code Review agent roles
+- Policy verdicts: `ALLOW`, `REQUIRE_HUMAN_APPROVAL`, and `BLOCK`
+- Risk flags and contract-lock requirements for auth, payment, database, contract, deployment, and high-impact changes
+- One-time human approval tokens whose plaintext is never persisted
+- Compare-and-swap repository state coordination
+- Atomic file backups and transaction manifests
+- Full before/after Basalt proof execution in temp or Docker sandboxes
+- Acceptance only when the resulting repository is `VERIFIED` without proof regression
+- Automatic rollback when proof fails or regresses
+- Manual rollback for verified transactions when repository state is still safe
+- Loop Governor with bounded attempts and repeated-patch/oscillation detection
+- Persistent run state, agent actions, policy evidence, verification deltas, and audit logs
+- Built-in deterministic proof-hardening proposals for weak Python boundary tests
+- All Phase 1 proof and Phase 2 graph/context capabilities
 
 ## Install
 
@@ -37,7 +38,104 @@ python -m pip install --upgrade pip setuptools wheel
 python -m pip install -e .
 ```
 
-## Core workflow
+## Safe-fix workflow
+
+### 1. Plan a governed patch
+
+An external coding agent may produce a normal unified diff. Basalt does not let that agent write directly to the repository.
+
+```bash
+basalt agent plan /path/to/repo \
+  --task "Fix the login redirect regression" \
+  --role FrontendAgent \
+  --target src/LoginPage.tsx \
+  --patch /path/to/fix.patch
+```
+
+For a weak Python test discovered by Basalt mutation testing, omit `--patch` to request the built-in deterministic proof-hardening proposal:
+
+```bash
+basalt agent plan /path/to/repo \
+  --task "Strengthen boundary proof" \
+  --role TestingAgent \
+  --target app.py
+```
+
+Planning performs repository-state capture, graph refresh, context compilation, before-proof execution, patch preflight, impact analysis, Policy Kernel review, and deterministic Testing/Security/Code Review actions.
+
+### 2. Approve or reject
+
+```bash
+basalt agent approve /path/to/repo <run-id> \
+  --by "Amogh RB" \
+  --reason "Reviewed the patch, impact map, and policy evidence"
+```
+
+Basalt prints a one-time token. Only the token hash is stored.
+
+```bash
+basalt agent reject /path/to/repo <run-id> \
+  --by "Amogh RB" \
+  --reason "The proposed behavior is not approved"
+```
+
+### 3. Apply and verify
+
+```bash
+basalt agent apply /path/to/repo <run-id> \
+  --token <one-time-token> \
+  --sandbox auto
+```
+
+Basalt applies the patch atomically, runs the complete proof system, compares before and after evidence, refreshes the Project Knowledge Graph, and commits the state transaction only when the result is verified. Failed or regressive patches are restored automatically.
+
+### 4. Audit or roll back
+
+```bash
+basalt agent status /path/to/repo
+basalt agent status /path/to/repo <run-id>
+
+basalt agent rollback /path/to/repo <run-id> \
+  --by "Amogh RB" \
+  --reason "Reverting the accepted transaction"
+```
+
+Manual rollback fails closed when unrelated repository changes make restoration unsafe.
+
+### 5. Revise under the Loop Governor
+
+```bash
+basalt agent revise /path/to/repo <run-id> --patch /path/to/revised.patch
+```
+
+Revisions receive a fresh policy decision. Basalt stops repeated patch hashes, oscillation, and attempts beyond the configured limit.
+
+## Policy configuration
+
+```yaml
+agents:
+  enabled: true
+  max_files: 8
+  max_changed_lines: 400
+  max_attempts: 3
+  require_human_approval_for_source: true
+  allow_test_only_auto_apply: false
+  protected_paths: .github/workflows,.env,infra,deploy
+  allowed_roles: ImplementationAgent,BuilderAgent,FrontendAgent,BackendAgent,DatabaseAgent,TestingAgent,DevOpsAgent,DocumentationAgent
+```
+
+Default safety behavior:
+
+- source changes require explicit human approval;
+- test-only auto-apply is disabled;
+- review agents cannot author patches;
+- Testing Agent cannot edit source files;
+- Database Agent cannot perform destructive schema changes;
+- protected paths and secret introduction are blocked;
+- stale state cannot be applied;
+- no patch is accepted without full proof.
+
+## Existing platform commands
 
 ```bash
 basalt doctor
@@ -45,125 +143,62 @@ basalt inspect .
 basalt graph build .
 basalt graph status .
 basalt graph query . login
-basalt impact . basalt_proof/knowledge_graph.py
-basalt context . \
-  --task "Fix stale graph detection" \
-  --role CodeReviewAgent \
-  --target basalt_proof/knowledge_graph.py
+basalt impact . basalt_proof/agent_runtime.py
+basalt context . --task "Review transaction safety" --role CodeReviewAgent --target basalt_proof/agent_runtime.py
 basalt verify .
 ```
 
-## Project Knowledge Graph commands
+## Agent-run artifacts
 
-```bash
-# Build or refresh the persistent graph
-basalt graph build /path/to/repo
-
-# Check whether the stored graph matches current file hashes
-basalt graph status /path/to/repo
-
-# Search files, symbols, and features
-basalt graph query /path/to/repo auth
-basalt graph query /path/to/repo login_user --kind function
-
-# Analyze downstream change impact
-basalt impact /path/to/repo app/auth.py
-basalt impact /path/to/repo login_user --depth 4
-```
-
-## Context Compiler
-
-```bash
-basalt context /path/to/repo \
-  --task "Fix the login redirect bug" \
-  --role FrontendAgent \
-  --target src/LoginPage.tsx \
-  --budget 12000
-```
-
-The generated context pack contains:
-
-- project state hash and freshness proof;
-- selected files and source snippets;
-- relevant symbols and signatures;
-- mapped tests and features;
-- routes, schemas, and dependencies;
-- policy constraints;
-- deterministic selection reasons;
-- estimated token usage and context precision.
-
-## Explicit feature mapping
-
-Basalt can infer features from paths and symbol names. For stronger product truth, add `basalt.features.json`:
-
-```json
-{
-  "features": [
-    {
-      "id": "login",
-      "name": "Login",
-      "description": "User authentication and session creation",
-      "keywords": ["auth", "login", "session"],
-      "files": ["app/auth.py", "frontend/LoginPage.tsx"],
-      "tests": ["tests/test_auth.py"]
-    }
-  ]
-}
-```
-
-## Configuration
-
-```yaml
-knowledge_graph:
-  auto_refresh: true
-  exclude: examples,dist,build
-
-context:
-  token_budget: 12000
-```
-
-`auto_refresh: true` prevents agents from receiving stale code truth. With automatic refresh disabled, context compilation fails closed until the graph is rebuilt.
-
-## Generated artifacts
+Each run is stored under:
 
 ```text
-.basalt/knowledge-graph.sqlite3
-.basalt/project-graph.json
-.basalt/project-graph.md
-.basalt/graph-manifest.json
-.basalt/impact-analysis.json
-.basalt/impact-analysis.md
-.basalt/context-pack.json
-.basalt/context-pack.md
-.basalt/context-packs/<context-id>.json
-.basalt/context-packs/<context-id>.md
-.basalt/proof-report.json
-.basalt/proof-report.md
-.basalt/basalt-dashboard.html
-.basalt/basalt-patch-plan.md
-.basalt/github-pr-description.md
+.basalt/agent-runs/<run-id>/
 ```
+
+Typical evidence includes:
+
+```text
+run.json
+candidate.patch
+candidate-patch.md
+patch-proposal.json
+policy-decision.json
+policy-decision.md
+approval.json
+before-proof-report.json
+after-proof-report.json
+verification-delta.json
+verification-delta.md
+state-transaction.json
+audit-log.json
+backup/
+```
+
+The exact set depends on how far the transaction progressed.
 
 ## Validation
 
-- `51` automated tests
-- Self-verification: `VERIFIED 98/100`
-- Mutation: killed
-- Non-low self-findings: none
-- Persistent graph verified through SQLite table assertions
-- Freshness tested for changed, new, and removed files
-- Python, JavaScript/TypeScript, and SQL graph extraction tested
-- Context budgets and role prioritization tested
-- Impact and CLI integration tested
+- `76` automated tests
+- Phase 1 and Phase 2 regression suites preserved
+- Safe source patch transaction tested
+- Weak-proof test hardening tested from `WEAK_PROOF 78/100` to `VERIFIED 98/100`
+- Proof-regressing patch tested with automatic rollback
+- Stale repository state tested fail-closed
+- Approval token hashing and one-time use tested
+- Capability violations and destructive changes tested as blocked
+- Loop attempt limits and repeated patch detection tested
+- Temp sandbox self-verification: recorded in `docs/PHASE3_VALIDATION_REPORT.md`
 
 ## Current boundary
 
-Phase 2 gives Basalt deterministic codebase understanding and focused context. It does not yet allow autonomous agents to apply production-code fixes. That belongs to **Phase 3 — Agent-Assisted Safe Fixes**, where Testing, Security, Review, and limited implementation agents will propose governed patches through the Policy Kernel and human approval gates.
+Phase 3 governs patches produced by external coding agents and includes a narrow deterministic proof-hardening generator. It does not yet call cloud LLMs, autonomously coordinate the final 12-agent system, deploy to production, or provide the full Command Center UI. Those capabilities belong to later roadmap phases.
 
 See:
 
-- `docs/PROJECT_KNOWLEDGE_GRAPH.md`
-- `docs/CONTEXT_COMPILER.md`
-- `docs/PHASE2_COMPLETION.md`
-- `docs/PHASE2_VALIDATION_REPORT.md`
-- `PHASE2_HANDOFF.md`
+- `docs/AGENT_SAFE_FIXES.md`
+- `docs/POLICY_KERNEL.md`
+- `docs/STATE_TRANSACTIONS_AND_LOOP_GOVERNOR.md`
+- `docs/PHASE3_COMPLETION.md`
+- `docs/PHASE3_VALIDATION_REPORT.md`
+- `PHASE3_HANDOFF.md`

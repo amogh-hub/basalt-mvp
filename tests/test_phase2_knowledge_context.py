@@ -204,7 +204,7 @@ class ProjectKnowledgeGraphTests(Phase2FixtureMixin, unittest.TestCase):
             graph = build_project_graph(repo, store)
             loaded = GraphStore(store).load()
             self.assertEqual(loaded.state_hash, graph.state_hash)
-            with sqlite3.connect(store) as connection:
+            with contextlib.closing(sqlite3.connect(store)) as connection:
                 symbol_count = connection.execute("SELECT COUNT(*) FROM symbols").fetchone()[0]
                 edge_count = connection.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
                 feature_count = connection.execute("SELECT COUNT(*) FROM features").fetchone()[0]

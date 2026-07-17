@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.2.0-alpha.1 — Phase 3 Safe Fix Platform
+
+### Added
+
+- Governed agent-assisted patch transaction runtime
+- Safe unified-diff parsing, preflight application, exact-context validation, and patch statistics
+- Role-scoped Policy Kernel with capability permissions and fail-closed verdicts
+- Protected-path, secret, destructive SQL, auth downgrade, dangerous execution, lockfile, and atomic-size rules
+- Impact-aware risk flags and architecture/contract lock requirements
+- External patch ingestion and deterministic mutation-guided proof-hardening proposals
+- Human approval records with one-time approval tokens; only token hashes are persisted
+- Repository-state compare-and-swap before mutation
+- Atomic byte backups, transaction manifests, and automatic restoration
+- Full before/after proof comparison in temp or Docker sandboxes
+- Automatic rollback for failed or regressive proof
+- Manual rollback guarded by current-state safety checks
+- Loop Governor with maximum attempts and repeated-patch/oscillation detection
+- Persistent agent run, policy, approval, proof-delta, state-transaction, and audit artifacts
+- New CLI commands under `basalt agent`: `plan`, `approve`, `apply`, `status`, `reject`, `revise`, and `rollback`
+- GitHub Actions governed safe-fix transaction smoke test
+- 25 Phase 3 tests, bringing the complete suite to 76 tests
+- Phase 3 architecture, validation, completion, release, and handoff documentation
+
+### Changed
+
+- Package version upgraded from 2.1.0a1 to 2.2.0a1
+- Product identity updated to the Basalt v2.2 Alpha Safe Fix Platform
+- Feature graph extended with agent runtime, policy, state transaction, and Loop Governor mappings
+
+### Preserved
+
+- All Phase 1 proof, sandbox, mutation, security, scoring, dashboard, and CI capabilities
+- All Phase 2 Project Knowledge Graph, freshness, impact-analysis, and Context Compiler capabilities
+
 ## 2.1.0-alpha.1 — Phase 2 Knowledge Platform
 
 ### Added
