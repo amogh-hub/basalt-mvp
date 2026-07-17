@@ -1,5 +1,5 @@
 project:
-  name: basalt-v2-alpha
+  name: basalt-v2.1-alpha
   type: python
 commands:
   install: null
@@ -15,6 +15,7 @@ proof:
   mutation_sample: true
   mutation_max: 1
   mutation_per_file: 2
+  mutation_test_command: python -m unittest tests.test_phase1_self_verification.ProofModelTests.test_failed_required_test_reduces_score
   mutation_include: basalt_proof/proof.py
   mutation_exclude: examples,basalt-demo-run
   security_scan: basic
@@ -32,3 +33,8 @@ sandbox:
   docker_image: python:3.13-slim
   network: install-only
   fallback_to_temp: true
+knowledge_graph:
+  auto_refresh: true
+  exclude: examples,basalt-demo-run
+context:
+  token_budget: 12000

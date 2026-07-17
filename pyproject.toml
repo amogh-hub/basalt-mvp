@@ -1,7 +1,7 @@
 [project]
 name = "basalt-mvp"
-version = "2.0.0a1"
-description = "Basalt v2.0 Alpha Proof Platform: sandboxed repository verification, mutation testing, security and dependency scanning, proof scoring, CI gates, dashboards, and PR-ready evidence."
+version = "2.1.0a1"
+description = "Basalt v2.1 Alpha Knowledge Platform: persistent AST-anchored project graphs, graph freshness, impact analysis, task-specific context compilation, and proof-first repository verification."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []

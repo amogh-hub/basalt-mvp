@@ -266,7 +266,16 @@ def run_mutation_sample(
                 return results
             file_path.write_text(candidate.mutated_text, encoding="utf-8")
             try:
-                test_result = executor.run(test_command, repo_path)
+                if isinstance(executor, CommandExecutor):
+                    mutation_executor = CommandExecutor(
+                        sandbox=executor.requested_sandbox,
+                        docker_image=executor.docker_image,
+                        docker_network=executor.docker_network,
+                        fallback_to_temp=executor.fallback_to_temp,
+                    )
+                else:
+                    mutation_executor = executor
+                test_result = mutation_executor.run(test_command, repo_path)
                 survived = test_result.status == CheckStatus.PASS
                 results.append(
                     MutationResult(

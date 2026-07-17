@@ -252,6 +252,12 @@ def load_config(repo_path: Path) -> BasaltConfig:
     proof = raw.get("proof", {}) if isinstance(raw.get("proof", {}), dict) else {}
     policy = raw.get("policy", {}) if isinstance(raw.get("policy", {}), dict) else {}
     sandbox = raw.get("sandbox", {}) if isinstance(raw.get("sandbox", {}), dict) else {}
+    knowledge_graph = (
+        raw.get("knowledge_graph", {})
+        if isinstance(raw.get("knowledge_graph", {}), dict)
+        else {}
+    )
+    context = raw.get("context", {}) if isinstance(raw.get("context", {}), dict) else {}
 
     project_name = str(project.get("name") or repo_path.name)
     project_type = str(project.get("type") or infer_project_type(repo_path))
@@ -300,6 +306,11 @@ def load_config(repo_path: Path) -> BasaltConfig:
         mutation_sample=bool(proof.get("mutation_sample", True)),
         mutation_max=max(0, int(proof.get("mutation_max", 8))),
         mutation_per_file=max(1, int(proof.get("mutation_per_file", 2))),
+        mutation_test_command=(
+            str(proof.get("mutation_test_command"))
+            if proof.get("mutation_test_command") not in (None, "")
+            else None
+        ),
         mutation_include=_csv_list(proof.get("mutation_include")),
         mutation_exclude=_csv_list(proof.get("mutation_exclude")),
         security_scan=str(proof.get("security_scan", "basic")),
@@ -316,6 +327,9 @@ def load_config(repo_path: Path) -> BasaltConfig:
         docker_image=docker_image,
         docker_network=network_mode,
         docker_fallback=bool(sandbox.get("fallback_to_temp", True)),
+        graph_auto_refresh=bool(knowledge_graph.get("auto_refresh", True)),
+        graph_exclude=_csv_list(knowledge_graph.get("exclude")),
+        context_token_budget=max(500, int(context.get("token_budget", 12000))),
     )
 
 
@@ -340,4 +354,4 @@ def render_default_config(project_name: str = "my-app", project_type: str = "pyt
         )
         require_build = "false"
         require_typecheck = "false"
-    return f"""project:\n  name: {project_name}\n  type: {project_type}\ncommands:\n{commands}\nproof:\n  require_build: {require_build}\n  require_lint: true\n  require_typecheck: {require_typecheck}\n  require_tests: true\n  mutation_sample: true\n  mutation_max: 8\n  mutation_per_file: 2\n  mutation_include: null\n  mutation_exclude: examples,dist,build\n  security_scan: basic\n  scan_exclude: examples/demo_policy_violation,fixtures\n  min_verified_score: 80\n  dashboard: true\n  patch_plan: true\n  pr_pack: true\npolicy:\n  block_secrets: true\n  block_destructive_migrations: true\n  require_human_approval_for_deploy: true\nsandbox:\n  mode: auto\n  docker_image: null\n  network: install-only\n  fallback_to_temp: true\n"""
+    return f"""project:\n  name: {project_name}\n  type: {project_type}\ncommands:\n{commands}\nproof:\n  require_build: {require_build}\n  require_lint: true\n  require_typecheck: {require_typecheck}\n  require_tests: true\n  mutation_sample: true\n  mutation_max: 8\n  mutation_per_file: 2\n  mutation_test_command: null\n  mutation_include: null\n  mutation_exclude: examples,dist,build\n  security_scan: basic\n  scan_exclude: examples/demo_policy_violation,fixtures\n  min_verified_score: 80\n  dashboard: true\n  patch_plan: true\n  pr_pack: true\npolicy:\n  block_secrets: true\n  block_destructive_migrations: true\n  require_human_approval_for_deploy: true\nsandbox:\n  mode: auto\n  docker_image: null\n  network: install-only\n  fallback_to_temp: true\nknowledge_graph:\n  auto_refresh: true\n  exclude: examples,dist,build\ncontext:\n  token_budget: 12000\n"""

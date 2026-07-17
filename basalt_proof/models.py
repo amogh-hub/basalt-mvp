@@ -65,12 +65,29 @@ class MutationResult:
 
 
 @dataclass
+class GraphFile:
+    path: str
+    language: str
+    hash: str
+    size_bytes: int = 0
+    modified_ns: int = 0
+    is_test: bool = False
+
+
+@dataclass
 class GraphSymbol:
     file: str
     name: str
     kind: str
     line: int
     signature: str = ""
+    id: str = ""
+    qualified_name: str = ""
+    end_line: int = 0
+    parent: str = ""
+    docstring: str = ""
+    return_type: str = ""
+    decorators: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -78,16 +95,104 @@ class GraphEdge:
     source: str
     target: str
     edge_type: str
+    source_file: str = ""
+    target_file: str = ""
+    line: int = 0
+    confidence: float = 1.0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class FeatureNode:
+    id: str
+    name: str
+    description: str = ""
+    files: list[str] = field(default_factory=list)
+    tests: list[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
+    source: str = "inferred"
+    confidence: float = 0.5
+
+
+@dataclass
+class TestMapping:
+    test_file: str
+    source_file: str
+    symbol: str = ""
+    reason: str = ""
+    confidence: float = 0.5
+
+
+@dataclass
+class GraphFreshness:
+    fresh: bool
+    reason: str
+    current_state_hash: str = ""
+    stored_state_hash: str = ""
+    changed_files: list[str] = field(default_factory=list)
+    new_files: list[str] = field(default_factory=list)
+    removed_files: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ImpactAnalysis:
+    target: str
+    found: bool
+    risk_level: str
+    impacted_files: list[str] = field(default_factory=list)
+    impacted_symbols: list[str] = field(default_factory=list)
+    impacted_tests: list[str] = field(default_factory=list)
+    impacted_features: list[str] = field(default_factory=list)
+    impacted_routes: list[str] = field(default_factory=list)
+    reasons: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class ContextPack:
+    context_pack_id: str
+    project_state_hash: str
+    created_at: str
+    task: str
+    task_type: str
+    agent_role: str
+    token_budget: int
+    estimated_tokens: int
+    target_entities: list[str] = field(default_factory=list)
+    files: list[dict[str, Any]] = field(default_factory=list)
+    symbols: list[dict[str, Any]] = field(default_factory=list)
+    tests: list[str] = field(default_factory=list)
+    features: list[str] = field(default_factory=list)
+    routes: list[str] = field(default_factory=list)
+    schemas: list[str] = field(default_factory=list)
+    dependencies: list[dict[str, Any]] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
+    freshness: dict[str, Any] = field(default_factory=dict)
+    selection_reasons: list[dict[str, Any]] = field(default_factory=list)
+    context_precision_score: float = 0.0
 
 
 @dataclass
 class KnowledgeGraph:
+    graph_version: str = "2.1"
+    parser_version: str = ""
+    state_hash: str = ""
+    built_at: str = ""
+    fresh: bool = False
     files_scanned: int = 0
+    files: list[GraphFile] = field(default_factory=list)
     symbols: list[GraphSymbol] = field(default_factory=list)
     edges: list[GraphEdge] = field(default_factory=list)
+    features: list[FeatureNode] = field(default_factory=list)
+    test_mappings: list[TestMapping] = field(default_factory=list)
     test_files: list[str] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)
     languages: dict[str, int] = field(default_factory=dict)
+    routes: list[str] = field(default_factory=list)
+    schemas: list[str] = field(default_factory=list)
+    changed_files: list[str] = field(default_factory=list)
+    reused_files: list[str] = field(default_factory=list)
+    removed_files: list[str] = field(default_factory=list)
+    store_path: str | None = None
 
 
 @dataclass
@@ -131,7 +236,7 @@ class ProofReport:
     evidence_dir: str | None = None
     dashboard_path: str | None = None
     patch_plan_path: str | None = None
-    basalt_version: str = "2.0.0a1"
+    basalt_version: str = "2.1.0a1"
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -155,6 +260,7 @@ class BasaltConfig:
     mutation_sample: bool = True
     mutation_max: int = 8
     mutation_per_file: int = 2
+    mutation_test_command: str | None = None
     mutation_include: list[str] = field(default_factory=list)
     mutation_exclude: list[str] = field(default_factory=list)
     security_scan: str = "basic"
@@ -171,6 +277,9 @@ class BasaltConfig:
     docker_image: str | None = None
     docker_network: str = "install-only"
     docker_fallback: bool = True
+    graph_auto_refresh: bool = True
+    graph_exclude: list[str] = field(default_factory=list)
+    context_token_budget: int = 12000
 
     def command_by_name(self, name: str) -> CommandSpec | None:
         return next((cmd for cmd in self.commands if cmd.name == name), None)

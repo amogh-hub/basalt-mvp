@@ -152,7 +152,7 @@ ul {{ line-height:1.9; }}
 </head>
 <body>
 <header class="hero">
-  <div class="logo">BASALT v2.0 ALPHA COMMAND CENTER</div>
+  <div class="logo">BASALT v2.1 ALPHA KNOWLEDGE COMMAND CENTER</div>
   <h1>{_esc(report.project_name)}</h1>
   <div class="subtitle">Proof-first repository verification. Basalt measures whether this repository has enough evidence, security discipline, and test strength to be trusted.</div>
   <div class="status"><span class="dot"></span><b>{_esc(status)}</b><span>Proof Score: {_esc(report.score)}/100</span></div>
@@ -176,10 +176,18 @@ ul {{ line-height:1.9; }}
   <section class="section"><h2>Security, Policy, Dependency & Quality Findings</h2><table><thead><tr><th>Level</th><th>Location</th><th>Rule</th><th>Message</th></tr></thead><tbody>{security_rows}</tbody></table></section>
   <section class="section"><h2>Mutation Testing</h2><p class="mut">Killed: {killed} · Survived: {survived}</p><table><thead><tr><th>File</th><th>Mutation</th><th>Result</th><th>Meaning</th></tr></thead><tbody>{mutation_rows}</tbody></table></section>
   <section class="section"><h2>Patch Plan</h2><div class="cards">{suggestion_cards}</div></section>
-  <section class="section"><h2>AST-Anchored Project Graph Preview</h2><p>{_esc(report.knowledge_graph.files_scanned)} files scanned, {_esc(len(report.knowledge_graph.symbols))} symbols found, {_esc(len(report.knowledge_graph.edges))} edges found, {_esc(len(report.knowledge_graph.test_files))} test files.</p><ul>{symbols_preview}</ul></section>
+  <section class="section"><h2>AST-Anchored Project Knowledge Graph</h2>
+    <div class="cards">
+      <div class="card"><h3>Project State</h3><p><code>{_esc(report.knowledge_graph.state_hash[:16])}</code></p><p class="mut">Fresh: {_esc(report.knowledge_graph.fresh)} · Parser: {_esc(report.knowledge_graph.parser_version)}</p></div>
+      <div class="card"><h3>Code Truth</h3><p>{_esc(report.knowledge_graph.files_scanned)} files · {_esc(len(report.knowledge_graph.symbols))} symbols · {_esc(len(report.knowledge_graph.edges))} edges</p></div>
+      <div class="card"><h3>Proof Mapping</h3><p>{_esc(len(report.knowledge_graph.test_files))} tests · {_esc(len(report.knowledge_graph.test_mappings))} file-to-test mappings</p></div>
+      <div class="card"><h3>Product Mapping</h3><p>{_esc(len(report.knowledge_graph.features))} features · {_esc(len(report.knowledge_graph.routes))} routes · {_esc(len(report.knowledge_graph.schemas))} schemas</p></div>
+    </div>
+    <ul>{symbols_preview}</ul>
+  </section>
   <section class="section"><h2>Generated Artifacts</h2><ul>{artifacts}</ul><p class="mut">Attach these artifacts to pull requests as proof evidence.</p></section>
   <section class="section"><h2>Raw JSON Evidence</h2><pre>{_esc(data)}</pre></section>
-  <div class="footer">Basalt v2.0.0-alpha.1 — Alpha Proof Platform. Verified software, not vibes.</div>
+  <div class="footer">Basalt v2.1.0-alpha.1 — Project Knowledge Graph + Context Compiler. Verified software, not vibes.</div>
 </main>
 </body>
 </html>"""

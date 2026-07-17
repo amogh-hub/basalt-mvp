@@ -3,7 +3,7 @@ name: Basalt Proof Gate
 on:
   push:
     branches:
-      - phase-1-v2-alpha
+      - phase-2-knowledge-graph
       - main
   pull_request:
     branches:
@@ -42,16 +42,64 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .
 
-      - name: Run unit tests
+      - name: Run complete test suite
         run: python -m unittest discover -s tests -v
 
       - name: Compile source
         run: python -m compileall basalt_proof tests
 
+  knowledge-platform:
+    name: Knowledge Graph and Context Compiler
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    timeout-minutes: 15
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Build persistent project graph
+        run: basalt graph build . --force
+
+      - name: Verify graph freshness
+        run: basalt graph status .
+
+      - name: Run graph query smoke test
+        run: basalt graph query . "knowledge graph"
+
+      - name: Run impact-analysis smoke test
+        run: basalt impact . basalt_proof/knowledge_graph.py --depth 2
+
+      - name: Compile task-specific context
+        run: |
+          basalt context .             --task "Review graph freshness and context selection"             --role CodeReviewAgent             --target basalt_proof/knowledge_graph.py             --budget 4000
+
+      - name: Upload knowledge artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-knowledge-${{ github.run_number }}-${{ github.run_attempt }}
+          path: .basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
   proof:
     name: Basalt Proof Gate
     runs-on: ubuntu-latest
-    needs: unit-tests
+    needs: [unit-tests, knowledge-platform]
     timeout-minutes: 20
 
     steps:
@@ -94,30 +142,56 @@ jobs:
           sandbox = report.get("sandbox", "unknown")
           mutations = report.get("mutations", [])
           findings = report.get("security_findings", [])
+          graph = report.get("knowledge_graph", {})
+
           survived = sum(1 for item in mutations if item.get("survived") is True)
           high_findings = sum(
               1 for item in findings
               if str(item.get("level", "")).upper() == "HIGH"
           )
+          state_hash = str(graph.get("state_hash", "missing"))
+          files_scanned = int(graph.get("files_scanned", 0))
+          symbols = len(graph.get("symbols", []))
+          edges = len(graph.get("edges", []))
+          features = len(graph.get("features", []))
+          test_mappings = len(graph.get("test_mappings", []))
+          fresh = bool(graph.get("fresh", False))
 
           print(f"Basalt verdict: {status}")
           print(f"Proof score: {score}/100")
           print(f"Sandbox: {sandbox}")
           print(f"Survived mutations: {survived}")
           print(f"High findings: {high_findings}")
+          print(f"Graph fresh: {fresh}")
+          print(f"Graph state: {state_hash}")
+          print(f"Files / symbols / edges: {files_scanned} / {symbols} / {edges}")
+          print(f"Features / test mappings: {features} / {test_mappings}")
 
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary_path:
               with open(summary_path, "a", encoding="utf-8") as summary:
-                  summary.write("# Basalt v2.0 Alpha Proof Report\n\n")
+                  summary.write("# Basalt v2.1 Alpha Knowledge Report\n\n")
                   summary.write(f"- **Verdict:** `{status}`\n")
                   summary.write(f"- **Proof score:** `{score}/100`\n")
                   summary.write(f"- **Sandbox:** `{sandbox}`\n")
                   summary.write(f"- **Survived mutations:** `{survived}`\n")
                   summary.write(f"- **High findings:** `{high_findings}`\n")
+                  summary.write(f"- **Graph fresh:** `{fresh}`\n")
+                  summary.write(f"- **Graph state:** `{state_hash[:16]}…`\n")
+                  summary.write(f"- **Files:** `{files_scanned}`\n")
+                  summary.write(f"- **Symbols:** `{symbols}`\n")
+                  summary.write(f"- **Edges:** `{edges}`\n")
+                  summary.write(f"- **Features:** `{features}`\n")
+                  summary.write(f"- **Test mappings:** `{test_mappings}`\n")
 
           if status != "VERIFIED":
               print(f"ERROR: Repository verdict is {status}, not VERIFIED.")
+              sys.exit(1)
+          if not fresh or not state_hash or state_hash == "missing":
+              print("ERROR: Project Knowledge Graph is missing or stale.")
+              sys.exit(1)
+          if files_scanned == 0 or symbols == 0 or edges == 0:
+              print("ERROR: Project Knowledge Graph has insufficient deterministic truth.")
               sys.exit(1)
           print("Basalt Proof Gate passed.")
           PY
