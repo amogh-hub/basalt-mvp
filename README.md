@@ -1,6 +1,6 @@
 # Basalt v2.4 Alpha AI Software Factory
 
-**Version:** `2.4.0a1`  
+**Version:** `2.4.0a1`
 **Core promise:** **Verified software, not vibes.**
 
 Basalt is a proof-first, prevention-first AI software factory. Phase 5 connects product intent, locked engineering truth, dependency-safe planning, governed specialist roles, model routing, staged implementation, adversarial proof, and atomic assembly into one alpha factory loop.
