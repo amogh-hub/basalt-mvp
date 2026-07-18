@@ -1,12 +1,12 @@
 project:
-  name: basalt-v2.3-alpha
+  name: basalt-v2.4-alpha
   type: python
 commands:
   install: null
   build: null
   lint: python -m compileall basalt_proof tests
   typecheck: null
-  test: python -m unittest discover -s tests -v
+  test: python tests/run_proof_matrix.py
 proof:
   require_build: false
   require_lint: true
@@ -47,3 +47,10 @@ agents:
   allow_test_only_auto_apply: false
   protected_paths: .github/workflows,.env,infra,deploy
   allowed_roles: ImplementationAgent,BuilderAgent,FrontendAgent,BackendAgent,DatabaseAgent,TestingAgent,DevOpsAgent,DocumentationAgent
+factory:
+  enabled: true
+  default_template: fullstack-lite
+  privacy_mode: local
+  require_verified_assembly: true
+  max_parallel_tasks: 4
+  design_system: basalt-obsidian

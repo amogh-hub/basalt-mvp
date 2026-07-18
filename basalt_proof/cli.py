@@ -40,9 +40,21 @@ from .models import GeneratedArtifact
 from .proof import verify_repo
 from .report import write_json_report, write_markdown_report
 from .runner import docker_status
+from .design_system import audit_design_system, write_design_system_artifacts
+from .model_router import ModelRouter
+from .state_coordinator import ContractLockError, StateConflictError
+from .software_factory import (
+    FactoryError,
+    build_factory_run,
+    create_product,
+    factory_snapshot,
+    list_factory_runs,
+    load_factory_run,
+    plan_factory_run,
+)
 
 
-PRODUCT_NAME = "Basalt v2.3 Alpha Command Center Platform"
+PRODUCT_NAME = "Basalt v2.4 Alpha AI Software Factory"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -190,6 +202,59 @@ def build_parser() -> argparse.ArgumentParser:
     agent_revise.add_argument("--patch", type=Path, required=True)
     agent_revise.add_argument("--out", type=Path, default=None)
     agent_revise.add_argument("--json", action="store_true")
+
+    factory = subparsers.add_parser(
+        "factory",
+        help="Plan and assemble proof-backed alpha products through governed specialist agents",
+    )
+    factory_commands = factory.add_subparsers(dest="factory_command")
+
+    factory_plan = factory_commands.add_parser("plan", help="Create a Product Brain blueprint, prevention plan, task graph, and model assignments")
+    factory_plan.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    factory_plan.add_argument("--prompt", required=True, help="Product intent")
+    factory_plan.add_argument("--name", required=True, help="Product name")
+    factory_plan.add_argument("--template", choices=["python-service", "fullstack-lite"], default="python-service")
+    factory_plan.add_argument("--users", action="append", default=[], help="Target user; repeatable")
+    factory_plan.add_argument("--constraint", action="append", default=[], help="Product or engineering constraint; repeatable")
+    factory_plan.add_argument("--privacy", choices=["local", "private", "standard"], default="local")
+    factory_plan.add_argument("--out", type=Path, default=None)
+    factory_plan.add_argument("--json", action="store_true")
+
+    factory_build = factory_commands.add_parser("build", help="Build and verify an existing factory plan before atomic assembly")
+    factory_build.add_argument("repo", type=Path)
+    factory_build.add_argument("run_id")
+    factory_build.add_argument("--target", type=Path, required=True)
+    factory_build.add_argument("--sandbox", choices=["auto", "temp", "docker"], default="temp")
+    factory_build.add_argument("--out", type=Path, default=None)
+    factory_build.add_argument("--json", action="store_true")
+
+    factory_create = factory_commands.add_parser("create", help="Plan, build, prove, and assemble a supported alpha product")
+    factory_create.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    factory_create.add_argument("--prompt", required=True, help="Product intent")
+    factory_create.add_argument("--name", required=True, help="Product name")
+    factory_create.add_argument("--target", type=Path, required=True)
+    factory_create.add_argument("--template", choices=["python-service", "fullstack-lite"], default="python-service")
+    factory_create.add_argument("--users", action="append", default=[])
+    factory_create.add_argument("--constraint", action="append", default=[])
+    factory_create.add_argument("--privacy", choices=["local", "private", "standard"], default="local")
+    factory_create.add_argument("--sandbox", choices=["auto", "temp", "docker"], default="temp")
+    factory_create.add_argument("--out", type=Path, default=None)
+    factory_create.add_argument("--json", action="store_true")
+
+    factory_status = factory_commands.add_parser("status", help="Show one factory run or list recent factory runs")
+    factory_status.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    factory_status.add_argument("run_id", nargs="?", default=None)
+    factory_status.add_argument("--out", type=Path, default=None)
+    factory_status.add_argument("--json", action="store_true")
+
+    factory_models = factory_commands.add_parser("models", help="Show provider-neutral model routing inventory")
+    factory_models.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    factory_models.add_argument("--json", action="store_true")
+
+    factory_design = factory_commands.add_parser("design-system", help="Write and audit the locked Basalt Obsidian design system")
+    factory_design.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    factory_design.add_argument("--out", type=Path, default=None)
+    factory_design.add_argument("--json", action="store_true")
 
     command_center = subparsers.add_parser(
         "command-center",
@@ -746,6 +811,106 @@ def run_agent(args: argparse.Namespace) -> int:
 
 
 
+def _print_factory_run(run) -> None:
+    print("Basalt Alpha AI Software Factory")
+    print(f"- run: {run.run_id}")
+    print(f"- product: {run.product_name}")
+    print(f"- template: {run.template}")
+    print(f"- status: {run.status.value}")
+    print(f"- base state: {run.base_state_version}")
+    if run.committed_state_version:
+        print(f"- committed state: {run.committed_state_version}")
+    print(f"- tasks / epochs: {len(run.tasks)} / {len(run.epochs)}")
+    print(f"- proof: {run.proof_status or 'NOT_RUN'} ({run.proof_score}/100)")
+    if run.target_path:
+        print(f"- target: {run.target_path}")
+    print(f"- message: {run.message}")
+
+
+def run_factory(args: argparse.Namespace) -> int:
+    if not args.factory_command:
+        print("Choose one of: plan, build, create, status, models, design-system", file=sys.stderr)
+        return 2
+    repo = args.repo.resolve()
+    out_dir = args.out.resolve() if getattr(args, "out", None) else None
+    try:
+        if args.factory_command == "plan":
+            run = plan_factory_run(
+                repo,
+                args.prompt,
+                args.name,
+                template=args.template,
+                target_users=args.users,
+                constraints=args.constraint,
+                privacy_mode=args.privacy,
+                out_dir=out_dir,
+            )
+        elif args.factory_command == "build":
+            run = build_factory_run(repo, args.run_id, args.target, sandbox=args.sandbox, out_dir=out_dir)
+        elif args.factory_command == "create":
+            run = create_product(
+                repo,
+                args.prompt,
+                args.name,
+                args.target,
+                template=args.template,
+                target_users=args.users,
+                constraints=args.constraint,
+                privacy_mode=args.privacy,
+                sandbox=args.sandbox,
+                out_dir=out_dir,
+            )
+        elif args.factory_command == "status":
+            if args.run_id:
+                run = load_factory_run(repo, args.run_id, out_dir)
+                if args.json:
+                    print(json.dumps(run.to_dict(), indent=2))
+                else:
+                    _print_factory_run(run)
+                return 0
+            runs = list_factory_runs(repo, out_dir)
+            if args.json:
+                print(json.dumps(runs, indent=2))
+            else:
+                print("Basalt Factory Runs")
+                if not runs:
+                    print("- no factory runs found")
+                for item in runs:
+                    print(f"- {item.get('run_id')}: {item.get('status')} — {item.get('product_name')}")
+            return 0
+        elif args.factory_command == "models":
+            data = ModelRouter().inventory()
+            if args.json:
+                print(json.dumps(data, indent=2))
+            else:
+                print("Basalt Model Router")
+                for item in data:
+                    print(f"- {item['provider']}/{item['model']}: {'available' if item['available'] else 'not configured'}")
+            return 0
+        else:
+            output = out_dir or repo / ".basalt"
+            paths = write_design_system_artifacts(repo, output)
+            findings = audit_design_system(repo)
+            payload = {"artifacts": [str(path) for path in paths], "findings": [item.__dict__ for item in findings]}
+            if args.json:
+                print(json.dumps(payload, indent=2))
+            else:
+                print("Basalt Obsidian Design System")
+                print(f"- findings: {len(findings)}")
+                for path in paths:
+                    print(f"- artifact: {path}")
+            return 1 if any(item.level == "HIGH" for item in findings) else 0
+        if args.json:
+            print(json.dumps(run.to_dict(), indent=2))
+        else:
+            _print_factory_run(run)
+            print(f"- artifacts: {(out_dir or repo / '.basalt') / 'factory-runs' / run.run_id}")
+        return 0 if run.status.value in {"PLANNED", "VERIFIED"} else 1
+    except (FactoryError, OSError, ValueError, StateConflictError, ContractLockError) as exc:
+        print(f"Basalt factory error: {exc}", file=sys.stderr)
+        return 1
+
+
 def run_command_center(args: argparse.Namespace) -> int:
     repo = args.repo.resolve()
     out_dir = args.out.resolve() if args.out else None
@@ -758,7 +923,7 @@ def run_command_center(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(snapshot, indent=2))
         else:
-            print("Basalt v2.3 Alpha Command Center Snapshot")
+            print("Basalt v2.4 Alpha Software Factory Snapshot")
             print(f"- project: {snapshot['project']['name']}")
             print(f"- verdict: {snapshot['truth']['status']}")
             print(f"- proof score: {snapshot['truth']['score']}/100")
@@ -842,6 +1007,7 @@ def main(argv: list[str] | None = None) -> int:
         "context": run_context,
         "agent": run_agent,
         "command-center": run_command_center,
+        "factory": run_factory,
     }
     handler = handlers.get(args.command)
     if handler:

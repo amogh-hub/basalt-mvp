@@ -191,7 +191,7 @@ def create_command_center_server(
                 if path == "/api/v1/health":
                     self._send_json(
                         HTTPStatus.OK,
-                        {"status": "ok", "service": "Basalt Command Center", "api_version": "v1"},
+                        {"status": "ok", "service": "Basalt AI Software Factory", "api_version": "v1"},
                     )
                     return
                 if path == "/api/v1/bootstrap":
@@ -223,8 +223,17 @@ def create_command_center_server(
                 if path == "/api/v1/runs":
                     self._send_json(HTTPStatus.OK, {"items": service.recent_runs()})
                     return
+                if path == "/api/v1/factory":
+                    self._send_json(HTTPStatus.OK, service.factory_state())
+                    return
+                if path == "/api/v1/factory/runs":
+                    self._send_json(HTTPStatus.OK, {"items": service.factory_runs()})
+                    return
                 if len(parts) == 4 and parts[:3] == ["api", "v1", "runs"]:
                     self._send_json(HTTPStatus.OK, service.run_detail(parts[3]))
+                    return
+                if len(parts) == 5 and parts[:4] == ["api", "v1", "factory", "runs"]:
+                    self._send_json(HTTPStatus.OK, service.factory_run_detail(parts[4]))
                     return
                 if path == "/api/v1/graph/query":
                     query = parse_qs(parsed.query)
@@ -284,6 +293,29 @@ def create_command_center_server(
                         return
                     self._send_json(HTTPStatus.OK, service.verify(data.get("sandbox")))
                     return
+                if parts == ["api", "v1", "factory", "plan"]:
+                    if not self._require_action_access():
+                        return
+                    users = data.get("users") or []
+                    constraints = data.get("constraints") or []
+                    if not isinstance(users, list) or not isinstance(constraints, list):
+                        raise ValueError("Factory users and constraints must be lists.")
+                    result = service.factory_plan(
+                        str(data.get("prompt", "")),
+                        str(data.get("name", "")),
+                        str(data.get("template", "python-service")),
+                        [str(item) for item in users],
+                        [str(item) for item in constraints],
+                        str(data.get("privacy", "local")),
+                    )
+                    self._send_json(HTTPStatus.OK, result)
+                    return
+                if len(parts) == 6 and parts[:4] == ["api", "v1", "factory", "runs"] and parts[5] == "build":
+                    if not self._require_action_access():
+                        return
+                    result = service.factory_build(parts[4], str(data.get("sandbox", "temp")))
+                    self._send_json(HTTPStatus.OK, result)
+                    return
                 if len(parts) == 5 and parts[:3] == ["api", "v1", "runs"]:
                     if not self._require_action_access():
                         return
@@ -339,7 +371,7 @@ def serve_command_center(
     actual_host, actual_port = server.server_address[:2]
     display_host = "127.0.0.1" if actual_host in {"0.0.0.0", "::"} else actual_host
     url = f"http://{display_host}:{actual_port}"
-    print("Basalt v2.3 Alpha Command Center")
+    print("Basalt v2.4 Alpha AI Software Factory")
     print(f"- repository: {Path(repo).resolve()}")
     print(f"- URL: {url}")
     print(f"- actions: {'enabled' if allow_actions else 'read-only'}")

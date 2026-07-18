@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.4.0-alpha.1 — Phase 5 Alpha AI Software Factory
+
+### Added
+
+- Product Brain for structured blueprints, requirements, flows, assumptions, risks, and success criteria
+- Prevention-First Engineering plan with contradiction checks, contract locks, test plans, and risk controls
+- deterministic SQLite State Coordinator with monotonic versions, compare-and-swap commits, and contract locks
+- dependency-aware five-epoch planner and intersecting patch aggregation
+- provider-neutral heterogeneous Model Router with local deterministic profiles and optional OpenAI-compatible adapter
+- governed specialist-agent task assignments and execution records
+- proof-backed staging and VERIFIED-only atomic product assembly
+- `python-service` and `fullstack-lite` alpha product templates
+- `basalt factory plan`, `build`, `create`, `status`, `models`, and `design-system` commands
+- Command Center factory, plan, agent, and model-routing views
+- Command Center factory APIs and action-token protected build endpoints
+- Basalt Obsidian design tokens and UI-governance audit
+- Phase 5 GitHub Actions software-factory gate
+- 37 Phase 5 tests, bringing the complete suite to 133 tests
+- Phase 5 architecture, validation, completion, release, and handoff documentation
+
+### Changed
+
+- Package version upgraded from `2.3.0a1` to `2.4.0a1`
+- Product identity updated to the Basalt v2.4 Alpha AI Software Factory
+- Command Center redesigned from lime-accented Phase 4 styling to the stealth Basalt Obsidian design system
+- Roadmap marks Phase 4 complete and Phase 5 active
+
+### Safety
+
+- target directories remain untouched until staged proof is VERIFIED
+- contradictory plans, stale state, contract lock conflicts, and unsupported templates fail closed
+- high-risk model work receives a separate review-family assignment
+- remote model use remains disabled unless deliberately configured
+
 ## 2.3.0-alpha.1 — Phase 4 Command Center Platform
 
 ### Added
