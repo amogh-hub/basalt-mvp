@@ -291,13 +291,14 @@ jobs:
 
       - name: Plan, build, prove, and assemble an alpha product
         run: |
+          rm -rf "$RUNNER_TEMP/basalt-alpha-product"
           basalt factory create . \
             --prompt "Build an authenticated booking platform with a dashboard, API, and notifications." \
             --name "Basalt Factory CI Product" \
             --template fullstack-lite \
             --privacy local \
             --sandbox temp \
-            --target phase5-ci-product
+            --target "$RUNNER_TEMP/basalt-alpha-product"
 
       - name: Enforce verified factory assembly
         run: |
