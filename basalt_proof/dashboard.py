@@ -152,7 +152,7 @@ ul {{ line-height:1.9; }}
 </head>
 <body>
 <header class="hero">
-  <div class="logo">BASALT v2.4 ALPHA SOFTWARE FACTORY</div>
+  <div class="logo">BASALT v2.5 PRIVATE BETA FULL BUILD SYSTEM</div>
   <h1>{_esc(report.project_name)}</h1>
   <div class="subtitle">Proof-first repository verification. Basalt measures whether this repository has enough evidence, security discipline, and test strength to be trusted.</div>
   <div class="status"><span class="dot"></span><b>{_esc(status)}</b><span>Proof Score: {_esc(report.score)}/100</span></div>
@@ -187,7 +187,7 @@ ul {{ line-height:1.9; }}
   </section>
   <section class="section"><h2>Generated Artifacts</h2><ul>{artifacts}</ul><p class="mut">Attach these artifacts to pull requests as proof evidence.</p></section>
   <section class="section"><h2>Raw JSON Evidence</h2><pre>{_esc(data)}</pre></section>
-  <div class="footer">Basalt v2.4.0-alpha.1 — Alpha AI Software Factory. Verified software, not vibes.</div>
+  <div class="footer">Basalt v2.5.0-beta.1 — Private Beta Full Build System. Verified software, not vibes.</div>
 </main>
 </body>
 </html>"""

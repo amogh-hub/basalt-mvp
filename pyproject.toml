@@ -1,7 +1,7 @@
 [project]
 name = "basalt-mvp"
-version = "2.4.0a1"
-description = "Basalt v2.4 Alpha AI Software Factory: product intent, prevention-first plans, deterministic state, dependency-safe epochs, governed specialist agents, model routing, proof-backed assembly, and the Basalt Command Center."
+version = "2.5.0b1"
+description = "Basalt v2.5 Private Beta Full Build System: persistent workspaces, teams, RBAC, durable jobs, provider integrations, isolated builds, verified deployment artifacts, and the Basalt Command Center."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
@@ -14,4 +14,4 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
-basalt_proof = ["webui/*.html", "webui/*.css", "webui/*.js"]
+basalt_proof = ["webui/*.html", "webui/*.css", "webui/*.js", "webui/brand/*.png"]

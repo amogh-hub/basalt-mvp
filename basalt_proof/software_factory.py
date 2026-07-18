@@ -32,7 +32,7 @@ from .report import write_json_report, write_markdown_report
 from .state_coordinator import ContractLockError, StateConflictError, StateCoordinator
 
 
-SUPPORTED_TEMPLATES = {"python-service", "fullstack-lite"}
+SUPPORTED_TEMPLATES = {"python-service", "api-service", "fullstack-lite", "web-app", "saas-starter"}
 
 
 class FactoryError(RuntimeError):
@@ -230,7 +230,7 @@ def plan_factory_run(
     if not repo.exists() or not repo.is_dir():
         raise FactoryError(f"Repository does not exist: {repo}")
     if template not in SUPPORTED_TEMPLATES:
-        raise FactoryError(f"Unsupported Phase 5 template: {template}")
+        raise FactoryError(f"Unsupported Phase 6 template: {template}")
     created = _now()
     run_id = f"factory_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{hashlib.sha256((name+prompt).encode()).hexdigest()[:10]}"
     directory = _run_dir(repo, run_id, out_dir)
@@ -510,6 +510,92 @@ footer {{ margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line)
     return files
 
 
+
+def _scaffold_saas(staging: Path, blueprint: ProductBlueprint) -> list[str]:
+    files = _scaffold_fullstack(staging, blueprint)
+    tenancy = """from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+class TenantAccessError(PermissionError):
+    pass
+
+
+@dataclass(frozen=True)
+class Membership:
+    user_id: str
+    tenant_id: str
+    role: str
+
+
+def require_tenant_access(membership: Membership, tenant_id: str, allowed_roles: set[str] | None = None) -> bool:
+    if membership.tenant_id != tenant_id:
+        raise TenantAccessError(\"Cross-tenant access is blocked.\")
+    if allowed_roles and membership.role not in allowed_roles:
+        raise TenantAccessError(\"Role is not permitted for this action.\")
+    return True
+
+
+def tenant_scope(records: list[dict], tenant_id: str) -> list[dict]:
+    return [item for item in records if item.get(\"tenant_id\") == tenant_id]
+"""
+    subscriptions = """from __future__ import annotations
+
+VALID_STATES = {\"trial\", \"active\", \"past_due\", \"cancelled\"}
+
+
+def normalize_plan(value: str) -> str:
+    plan = value.strip().lower()
+    if plan not in {\"starter\", \"team\", \"enterprise\"}:
+        raise ValueError(\"Unknown subscription plan.\")
+    return plan
+
+
+def can_use_feature(state: str, plan: str, required_plan: str = \"starter\") -> bool:
+    if state not in VALID_STATES or state in {\"past_due\", \"cancelled\"}:
+        return False
+    order = {\"starter\": 1, \"team\": 2, \"enterprise\": 3}
+    return order[normalize_plan(plan)] >= order[normalize_plan(required_plan)]
+"""
+    tests = """import unittest
+
+from app.subscriptions import can_use_feature, normalize_plan
+from app.tenancy import Membership, TenantAccessError, require_tenant_access, tenant_scope
+
+
+class SaaSFoundationTests(unittest.TestCase):
+    def test_cross_tenant_access_is_blocked(self):
+        with self.assertRaises(TenantAccessError):
+            require_tenant_access(Membership(\"u1\", \"t1\", \"admin\"), \"t2\")
+
+    def test_role_gate_is_enforced(self):
+        with self.assertRaises(TenantAccessError):
+            require_tenant_access(Membership(\"u1\", \"t1\", \"viewer\"), \"t1\", {\"admin\"})
+
+    def test_tenant_scope_filters_records(self):
+        records = [{\"tenant_id\": \"a\", \"id\": 1}, {\"tenant_id\": \"b\", \"id\": 2}]
+        self.assertEqual(tenant_scope(records, \"a\"), [{\"tenant_id\": \"a\", \"id\": 1}])
+
+    def test_subscription_gate_fails_closed(self):
+        self.assertFalse(can_use_feature(\"past_due\", \"enterprise\"))
+        self.assertFalse(can_use_feature(\"active\", \"starter\", \"team\"))
+        self.assertTrue(can_use_feature(\"active\", \"team\", \"team\"))
+
+    def test_unknown_plan_is_rejected(self):
+        with self.assertRaises(ValueError):
+            normalize_plan(\"unlimited\")
+
+
+if __name__ == \"__main__\":
+    unittest.main()
+"""
+    _write_text(staging / "app" / "tenancy.py", tenancy)
+    _write_text(staging / "app" / "subscriptions.py", subscriptions)
+    _write_text(staging / "tests" / "test_saas_foundation.py", tests)
+    files.extend(["app/tenancy.py", "app/subscriptions.py", "tests/test_saas_foundation.py"])
+    return files
+
 def _write_project_metadata(staging: Path, blueprint: ProductBlueprint, plan: EngineeringPlan, run: FactoryRun) -> list[str]:
     package = _package_name(blueprint.name)
     pyproject = f'''[project]
@@ -681,8 +767,10 @@ def build_factory_run(
     save_factory_run(repo, run, out_dir)
 
     try:
-        if blueprint.template == "fullstack-lite":
+        if blueprint.template in {"fullstack-lite", "web-app"}:
             generated = _scaffold_fullstack(staging, blueprint)
+        elif blueprint.template == "saas-starter":
+            generated = _scaffold_saas(staging, blueprint)
         else:
             generated = _scaffold_python_service(staging, blueprint)
         generated.extend(_write_project_metadata(staging, blueprint, plan, run))
@@ -788,7 +876,7 @@ def factory_snapshot(repo: Path, out_dir: Path | None = None) -> dict[str, Any]:
     state = coordinator.bootstrap(repository_hash(repo))
     runs = list_factory_runs(repo, out_dir)
     return {
-        "platform": "Basalt v2.4 Alpha AI Software Factory",
+        "platform": "Basalt v2.5 Private Beta Full Build System",
         "supported_templates": sorted(SUPPORTED_TEMPLATES),
         "metrics": {
             "total_runs": len(runs),

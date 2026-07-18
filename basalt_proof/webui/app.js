@@ -5,6 +5,7 @@ const state = {
   proof: null,
   bootstrap: { actions_enabled: false, action_token: "" },
   factory: null,
+  beta: null,
   selectedFactoryRun: null,
 };
 
@@ -465,6 +466,58 @@ function renderApprovals(items) {
   });
 }
 
+function renderBeta(data) {
+  state.beta = data;
+  const workspace = data?.workspace || {};
+  const jobs = data?.jobs || {};
+  const providers = data?.providers || {};
+  const deployments = data?.deployments || {};
+  const projects = workspace.projects || [];
+  const jobItems = jobs.jobs || [];
+  const providerItems = providers.providers || [];
+  const deploymentItems = deployments.deployments || [];
+  text("beta-project-count", projects.length);
+  text("beta-job-count", jobItems.length);
+  text("beta-provider-count", providers.configured || 0);
+  text("beta-deployment-count", deploymentItems.length);
+
+  const renderStack = (id, items, mapItem, emptyText) => {
+    const container = byId(id);
+    if (!container) return;
+    clear(container);
+    if (!items.length) {
+      container.className = "stack-list empty-state";
+      container.textContent = emptyText;
+      return;
+    }
+    container.className = "stack-list";
+    items.slice(0, 12).forEach((item) => {
+      const card = element("div", "stack-item");
+      const mapped = mapItem(item);
+      card.append(element("strong", "", mapped.title));
+      card.append(element("p", "", mapped.detail));
+      container.append(card);
+    });
+  };
+
+  renderStack("beta-projects", projects, (item) => ({
+    title: item.name || item.project_id,
+    detail: `${item.template || "project"} · ${item.privacy_mode || "local"} · ${item.status || "ACTIVE"}`,
+  }), "No private-beta projects registered.");
+  renderStack("beta-jobs", jobItems, (item) => ({
+    title: `${item.job_type || "JOB"} · ${item.status || "UNKNOWN"}`,
+    detail: `${item.job_id || ""} · attempts ${item.attempts || 0}/${item.max_attempts || 0}`,
+  }), "No private-beta jobs submitted.");
+  renderStack("beta-providers", providerItems, (item) => ({
+    title: item.display_name || item.provider_id,
+    detail: `${item.model || "model"} · ${item.configured ? "configured" : "not configured"} · ${item.kind || "provider"}`,
+  }), "No provider profiles loaded.");
+  renderStack("beta-deployments", deploymentItems, (item) => ({
+    title: `${item.environment || "preview"} · ${item.status || "UNKNOWN"}`,
+    detail: `${item.deployment_id || ""} · ${item.proof_status || "UNKNOWN"} ${item.proof_score || 0}/100`,
+  }), "No deployment artifacts packaged.");
+}
+
 function renderArtifacts(items) {
   const container = byId("artifact-list");
   clear(container);
@@ -594,10 +647,13 @@ async function submitAction(event) {
 
 async function loadAll() {
   try {
-    const [overview, proof, factory] = await Promise.all([api("/api/v1/overview"), api("/api/v1/proof"), api("/api/v1/factory")]);
+    const [overview, proof, factory, beta] = await Promise.all([
+      api("/api/v1/overview"), api("/api/v1/proof"), api("/api/v1/factory"), api("/api/v1/beta")
+    ]);
     renderOverview(overview);
     renderProof(proof || {});
     renderFactoryState(factory || {});
+    renderBeta(beta || {});
   } catch (error) {
     banner(error.message, "bad");
   }
@@ -663,5 +719,5 @@ byId("factory-plan-form").addEventListener("submit", async (event) => {
 byId("close-factory-detail").addEventListener("click", () => byId("factory-detail-panel").classList.add("hidden"));
 
 const initialSection = window.location.hash.slice(1);
-if (["overview", "factory", "plan", "agents", "proof", "graph", "transactions", "approvals", "evidence"].includes(initialSection)) switchView(initialSection);
+if (["overview", "factory", "plan", "agents", "proof", "graph", "transactions", "approvals", "beta", "evidence"].includes(initialSection)) switchView(initialSection);
 initialize();

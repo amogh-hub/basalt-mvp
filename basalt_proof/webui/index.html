@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Basalt AI Software Factory</title>
+  <title>Basalt Private Beta</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Primary navigation">
-      <a class="brand" href="#overview" aria-label="Basalt AI Software Factory home">
-        <span class="brand-mark">B</span>
-        <span><strong>BASALT</strong><small>SOFTWARE FACTORY</small></span>
+      <a class="brand" href="#overview" aria-label="Basalt Private Beta home">
+        <span class="brand-wordmark" aria-hidden="true"></span>
+        <small>PRIVATE BETA</small>
       </a>
       <nav id="main-nav">
         <a class="nav-item active" href="#overview" data-section="overview"><span>01</span>Overview</a>
@@ -23,7 +23,8 @@
         <a class="nav-item" href="#graph" data-section="graph"><span>06</span>Knowledge</a>
         <a class="nav-item" href="#transactions" data-section="transactions"><span>07</span>Transactions</a>
         <a class="nav-item" href="#approvals" data-section="approvals"><span>08</span>Approvals</a>
-        <a class="nav-item" href="#evidence" data-section="evidence"><span>09</span>Evidence</a>
+        <a class="nav-item" href="#beta" data-section="beta"><span>09</span>Private Beta</a>
+        <a class="nav-item" href="#evidence" data-section="evidence"><span>10</span>Evidence</a>
       </nav>
       <div class="sidebar-footer">
         <div class="mode-indicator"><span id="mode-dot"></span><span id="mode-label">Read-only</span></div>
@@ -75,7 +76,7 @@
 
         <div class="two-column">
           <article class="panel">
-            <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h3>Roadmap state</h3></div><span class="panel-chip">Phase 5</span></div>
+            <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h3>Roadmap state</h3></div><span class="panel-chip">Phase 6</span></div>
             <div id="roadmap-list" class="roadmap-list"></div>
           </article>
           <article class="panel">
@@ -100,7 +101,7 @@
             <form id="factory-plan-form" class="tool-form">
               <label>Product name<input id="factory-name" required maxlength="80" placeholder="Venue Core"></label>
               <label>Product intent<textarea id="factory-prompt" required rows="6" placeholder="Build a booking platform with authentication, owner dashboards, notifications, and an API."></textarea></label>
-              <label>Template<select id="factory-template"><option value="fullstack-lite">Full-stack lite</option><option value="python-service">Python service</option></select></label>
+              <label>Template<select id="factory-template"><option value="saas-starter">SaaS starter</option><option value="web-app">Web app</option><option value="fullstack-lite">Full-stack lite</option><option value="api-service">API service</option><option value="python-service">Python service</option></select></label>
               <label>Target users, comma separated<input id="factory-users" placeholder="Venue owners, customers"></label>
               <label>Constraints, one per line<textarea id="factory-constraints" rows="3" placeholder="No production secrets
 Local verification only"></textarea></label>
@@ -194,6 +195,24 @@ Local verification only"></textarea></label>
       <section id="approvals" class="view" aria-labelledby="approvals-title">
         <div class="section-heading"><div><p class="eyebrow">HUMAN JUDGMENT</p><h2 id="approvals-title">Approval center</h2></div><span id="approval-count" class="panel-chip">0 pending</span></div>
         <div id="approval-list" class="approval-list empty-state">No decisions require human approval.</div>
+      </section>
+
+      <section id="beta" class="view" aria-labelledby="beta-title">
+        <div class="section-heading"><div><p class="eyebrow">PRIVATE BETA CONTROL PLANE</p><h2 id="beta-title">Projects, jobs, providers, and deployments</h2><p class="muted">Persistent teams and projects feed durable isolated jobs. Verified artifacts move through explicit deployment gates.</p></div><span class="panel-chip">Phase 6</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Projects</p><strong id="beta-project-count">0</strong></article>
+          <article class="metric-card"><p>Queued jobs</p><strong id="beta-job-count">0</strong></article>
+          <article class="metric-card"><p>Configured providers</p><strong id="beta-provider-count">0</strong></article>
+          <article class="metric-card"><p>Deployments</p><strong id="beta-deployment-count">0</strong></article>
+        </div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">WORKSPACE</p><h3>Persistent projects</h3></div></div><div id="beta-projects" class="stack-list empty-state">No private-beta projects registered.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">DURABLE EXECUTION</p><h3>Job queue</h3></div></div><div id="beta-jobs" class="stack-list empty-state">No private-beta jobs submitted.</div></article>
+        </div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">MODEL PROVIDERS</p><h3>Secret-safe configuration</h3></div></div><div id="beta-providers" class="stack-list empty-state">No provider profiles loaded.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RELEASE CONTROL</p><h3>Deployment ledger</h3></div></div><div id="beta-deployments" class="stack-list empty-state">No deployment artifacts packaged.</div></article>
+        </div>
       </section>
 
       <section id="evidence" class="view" aria-labelledby="evidence-title">

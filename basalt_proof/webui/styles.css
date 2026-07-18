@@ -26,10 +26,9 @@ button { cursor: pointer; }
 a { color: inherit; text-decoration: none; }
 .app-shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; height: 100vh; padding: 26px 18px; border-right: 1px solid var(--line); background: rgba(10,12,15,.96); display: flex; flex-direction: column; }
-.brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 28px; border-bottom: 1px solid var(--line-soft); }
-.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(145deg, #1b2026, #0d1014); color: var(--text); border: 1px solid var(--line-strong); font-weight: 900; box-shadow: 0 14px 32px rgba(0,0,0,.28); }
-.brand strong { display: block; letter-spacing: .16em; font-size: 13px; }
-.brand small { display: block; color: var(--muted); font-size: 9px; letter-spacing: .14em; margin-top: 4px; }
+.brand { display: grid; gap: 8px; padding: 0 8px 28px; border-bottom: 1px solid var(--line-soft); color: var(--text); }
+.brand-wordmark { display: block; width: 116px; height: 38px; background: currentColor; -webkit-mask: url("/assets/brand/basalt-wordmark-mask.png") center / contain no-repeat; mask: url("/assets/brand/basalt-wordmark-mask.png") center / contain no-repeat; }
+.brand small { display: block; color: var(--muted); font-size: 8px; letter-spacing: .18em; }
 nav { display: grid; gap: 6px; margin-top: 24px; }
 .nav-item { display: flex; align-items: center; gap: 13px; padding: 11px 12px; border-radius: 11px; color: var(--muted); font-size: 13px; transition: .18s ease; }
 .nav-item span { color: var(--faint); font-size: 10px; font-variant-numeric: tabular-nums; }
@@ -149,7 +148,7 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
 .dialog-card { padding: 22px; display: grid; gap: 14px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 4px; }
 .hidden { display: none !important; }
-@media (max-width: 1050px) { .app-shell { grid-template-columns: 82px minmax(0,1fr); } .brand strong, .brand small, .nav-item:not(.active) { font-size: 0; } .brand { justify-content: center; padding-left: 0; padding-right: 0; } .nav-item { justify-content: center; } .nav-item span { font-size: 10px; } .sidebar-footer p, .mode-indicator span:last-child { display: none; } }
+@media (max-width: 1050px) { .app-shell { grid-template-columns: 82px minmax(0,1fr); } .brand small, .nav-item:not(.active) { font-size: 0; } .brand { justify-content: center; padding-left: 0; padding-right: 0; } .nav-item { justify-content: center; } .nav-item span { font-size: 10px; } .sidebar-footer p, .mode-indicator span:last-child { display: none; } }
 @media (max-width: 800px) { .app-shell { display: block; } .sidebar { position: static; width: 100%; height: auto; padding: 12px; flex-direction: row; align-items: center; overflow-x: auto; } .brand { padding: 0 14px 0 0; border: 0; } nav { display: flex; margin: 0; } .nav-item { white-space: nowrap; } .sidebar-footer { display: none; } .main-area { padding: 24px 18px 50px; } .metric-grid, .two-column { grid-template-columns: 1fr 1fr; } .topbar { flex-direction: column; } .hero-panel { align-items: flex-start; } .detail-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .metric-grid, .two-column, .result-grid, .detail-grid { grid-template-columns: 1fr; } .hero-panel { flex-direction: column; padding: 24px; } .score-orbit { width: 100%; } .topbar-actions { width: 100%; } .topbar-actions .button { flex: 1; } }
 
@@ -164,3 +163,7 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
 #factory-detail-actions { justify-content: flex-start; margin-top: 18px; }
 @media (max-width: 1120px) { .epoch-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .epoch-grid { grid-template-columns: 1fr; } }
+
+@media (prefers-color-scheme: light) {
+  .brand { color: #08090b; }
+}

@@ -150,6 +150,21 @@ class ProjectKnowledgeGraphTests(Phase2FixtureMixin, unittest.TestCase):
                 )
             )
 
+    def test_javascript_duplicate_function_names_receive_unique_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            source = repo / "ui.js"
+            source.write_text(
+                "function renderStack() { return 1; }\n"
+                "function renderStack() { return 2; }\n",
+                encoding="utf-8",
+            )
+            graph = build_project_graph(repo)
+            matches = [item for item in graph.symbols if item.name == "renderStack"]
+            self.assertEqual(len(matches), 2)
+            self.assertEqual(len({item.id for item in matches}), 2)
+            self.assertEqual(matches[1].qualified_name, "renderStack#2")
+
     def test_sql_schema_nodes_and_references(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)

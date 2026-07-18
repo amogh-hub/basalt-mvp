@@ -25,6 +25,7 @@ from .knowledge_graph import analyze_impact, build_project_graph, render_impact_
 from .proof import verify_repo
 from .report import write_json_report, write_markdown_report
 from .dashboard import write_dashboard
+from .private_beta import PrivateBetaPlatform
 from .software_factory import (
     build_factory_run,
     factory_snapshot,
@@ -138,6 +139,13 @@ class CommandCenterService:
     @property
     def graph_store_path(self) -> Path:
         return self.out_dir / "knowledge-graph.sqlite3"
+
+    @property
+    def private_beta_root(self) -> Path:
+        return self.out_dir / "private-beta"
+
+    def private_beta(self) -> PrivateBetaPlatform:
+        return PrivateBetaPlatform(self.private_beta_root)
 
     def _config_and_excludes(self):
         config = load_config(self.repo)
@@ -264,7 +272,7 @@ class CommandCenterService:
             return {
                 "api_version": COMMAND_CENTER_API_VERSION,
                 "generated_at": _now(),
-                "platform": "Basalt v2.4 Alpha AI Software Factory",
+                "platform": "Basalt v2.5 Private Beta Full Build System",
                 "project": {
                     "name": project_name,
                     "path": str(self.repo),
@@ -278,7 +286,7 @@ class CommandCenterService:
                     "graph_fresh": bool(graph.fresh),
                     "last_verified_at": str(report.get("finished_at", "")),
                     "intent": "Plan, build, prove, and safely evolve software through governed factory transactions.",
-                    "current_phase": "Alpha AI Software Factory",
+                    "current_phase": "Private Beta Full Build System",
                 },
                 "proof": _proof_metrics(report),
                 "graph": _graph_metrics(graph),
@@ -297,8 +305,9 @@ class CommandCenterService:
                     "rolled_back": factory_status_counts.get("ROLLED_BACK", 0),
                     "status_counts": dict(factory_status_counts),
                     "recent": factory_runs[:12],
-                    "supported_templates": ["python-service", "fullstack-lite"],
+                    "supported_templates": ["python-service", "api-service", "fullstack-lite", "web-app", "saas-starter"],
                 },
+                "private_beta": self.private_beta().snapshot(),
                 "artifacts": {"count": len(self.artifacts()), "items": self.artifacts()},
                 "roadmap": [
                     {"phase": 0, "name": "Vision + Grant/Demo MVP", "status": "COMPLETE"},
@@ -306,8 +315,8 @@ class CommandCenterService:
                     {"phase": 2, "name": "Knowledge Graph + Context Compiler", "status": "COMPLETE"},
                     {"phase": 3, "name": "Agent-Assisted Safe Fixes", "status": "COMPLETE"},
                     {"phase": 4, "name": "Command Center Web App", "status": "COMPLETE"},
-                    {"phase": 5, "name": "Alpha AI Software Factory", "status": "ACTIVE"},
-                    {"phase": 6, "name": "Private Beta Full Build System", "status": "UPCOMING"},
+                    {"phase": 5, "name": "Alpha AI Software Factory", "status": "COMPLETE"},
+                    {"phase": 6, "name": "Private Beta Full Build System", "status": "ACTIVE"},
                     {"phase": 7, "name": "Production Basalt v1", "status": "UPCOMING"},
                     {"phase": 8, "name": "Full Basalt Final Vision", "status": "UPCOMING"},
                 ],
@@ -411,6 +420,57 @@ class CommandCenterService:
                 sandbox=sandbox,
                 out_dir=self.out_dir,
             ).to_dict()
+
+    def beta_state(self) -> dict[str, Any]:
+        return self.private_beta().snapshot()
+
+    def beta_bootstrap(self, email: str, display_name: str, team_name: str) -> dict[str, Any]:
+        if not email.strip() or not display_name.strip() or not team_name.strip():
+            raise ValueError("Email, display name, and team name are required.")
+        return self.private_beta().bootstrap(email.strip(), display_name.strip(), team_name.strip())
+
+    def beta_add_project(
+        self,
+        team_id: str,
+        name: str,
+        repo_path: str,
+        created_by: str,
+        template: str = "fullstack-lite",
+        privacy_mode: str = "local",
+    ) -> dict[str, Any]:
+        return self.private_beta().add_project(
+            team_id.strip(), name.strip(), Path(repo_path), created_by.strip(), template, privacy_mode
+        )
+
+    def beta_submit_job(
+        self,
+        project_id: str,
+        job_type: str,
+        payload: dict[str, Any],
+        created_by: str,
+        idempotency_key: str = "",
+    ) -> dict[str, Any]:
+        return self.private_beta().submit_job(
+            project_id.strip(), job_type.strip(), payload, created_by.strip(), idempotency_key.strip()
+        )
+
+    def beta_run_job(self, job_id: str, worker_id: str = "command-center-worker") -> dict[str, Any]:
+        return self.private_beta().run_job(job_id.strip(), worker_id.strip())
+
+    def beta_cancel_job(self, job_id: str, actor: str, reason: str) -> dict[str, Any]:
+        return self.private_beta().jobs.cancel(job_id.strip(), actor.strip(), reason.strip()).to_dict()
+
+    def beta_retry_job(self, job_id: str, actor: str) -> dict[str, Any]:
+        return self.private_beta().jobs.retry(job_id.strip(), actor.strip()).to_dict()
+
+    def beta_approve_deployment(self, deployment_id: str, actor: str, reason: str) -> dict[str, Any]:
+        return self.private_beta().deployments.approve(deployment_id.strip(), actor.strip(), reason.strip()).to_dict()
+
+    def beta_promote_deployment(self, deployment_id: str, actor: str) -> dict[str, Any]:
+        return self.private_beta().deployments.promote(deployment_id.strip(), actor.strip()).to_dict()
+
+    def beta_rollback_deployment(self, deployment_id: str, actor: str, reason: str) -> dict[str, Any]:
+        return self.private_beta().deployments.rollback(deployment_id.strip(), actor.strip(), reason.strip()).to_dict()
 
     def verify(self, sandbox: str | None = None) -> dict[str, Any]:
         if sandbox not in {None, "auto", "temp", "docker"}:

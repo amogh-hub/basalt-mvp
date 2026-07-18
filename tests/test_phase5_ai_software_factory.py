@@ -370,12 +370,12 @@ def request(server, method: str, path: str, body: dict | None = None, token: str
 
 
 class Phase5CommandCenterTests(unittest.TestCase):
-    def test_overview_marks_phase5_active(self):
+    def test_overview_marks_phase5_complete_in_private_beta(self):
         with tempfile.TemporaryDirectory() as td:
             repo = make_source_repo(Path(td))
             overview = CommandCenterService(repo).overview()
             self.assertEqual(overview["roadmap"][4]["status"], "COMPLETE")
-            self.assertEqual(overview["roadmap"][5]["status"], "ACTIVE")
+            self.assertEqual(overview["roadmap"][5]["status"], "COMPLETE")
             self.assertIn("factory", overview)
 
     def test_factory_api_is_readable_but_planning_requires_actions(self):

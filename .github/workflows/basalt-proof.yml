@@ -3,7 +3,7 @@ name: Basalt Proof Gate
 on:
   push:
     branches:
-      - phase-5-ai-software-factory
+      - phase-6-private-beta
       - main
   pull_request:
     branches:
@@ -350,9 +350,187 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: basalt-software-factory-${{ github.run_number }}-${{ github.run_attempt }}
-          path: |
-            .basalt/
-            phase5-ci-product/.basalt/
+          path: .basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+
+  private-beta-platform:
+    name: Private Beta Full Build System
+    runs-on: ubuntu-latest
+    needs: software-factory-platform
+    timeout-minutes: 30
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Run Phase 6 private-beta tests
+        run: python -m unittest tests.test_phase6_private_beta -v
+
+      - name: Audit official Basalt design and brand system
+        run: |
+          basalt factory design-system .
+          test -s basalt_proof/webui/brand/basalt-wordmark-mask.png
+          test -s basalt_proof/webui/brand/basalt-wordmark-dark.png
+          test -s basalt_proof/webui/brand/basalt-wordmark-light.png
+
+      - name: Exercise durable private-beta build and deployment flow
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+
+          from basalt_proof.private_beta import PrivateBetaPlatform
+
+          fixture = Path(os.environ['RUNNER_TEMP']) / 'phase6-ci-project'
+          shutil.rmtree(fixture, ignore_errors=True)
+          (fixture / 'tests').mkdir(parents=True)
+          (fixture / 'app.py').write_text(
+              'def health():\n    return {"status": "ok"}\n',
+              encoding='utf-8',
+          )
+          (fixture / 'tests' / 'test_app.py').write_text(
+              'import unittest\nfrom app import health\n\n'
+              'class HealthTests(unittest.TestCase):\n'
+              '    def test_health(self):\n'
+              '        self.assertEqual(health()["status"], "ok")\n',
+              encoding='utf-8',
+          )
+          (fixture / 'basalt.yaml').write_text(
+              'project:\n  name: phase6-ci\n  type: python\n'
+              'commands:\n  lint: python -m compileall app.py tests\n'
+              '  test: python -m unittest discover -s tests -v\n'
+              'proof:\n  require_lint: true\n  require_tests: true\n  mutation_sample: false\n'
+              'sandbox:\n  mode: temp\n',
+              encoding='utf-8',
+          )
+
+          root = Path('.basalt/private-beta-ci')
+          platform = PrivateBetaPlatform(root)
+          bootstrap = platform.bootstrap('ci@basalt.local', 'Basalt CI', 'Basalt CI Team')
+          user_id = bootstrap['user']['user_id']
+          team_id = bootstrap['team']['team_id']
+          project = platform.add_project(
+              team_id,
+              'Basalt Private Beta CI',
+              fixture,
+              user_id,
+              template='saas-starter',
+              privacy_mode='local',
+          )
+          project_id = project['project_id']
+
+          verify_job = platform.submit_job(
+              project_id,
+              'VERIFY_PROJECT',
+              {'sandbox': 'temp'},
+              user_id,
+              idempotency_key='ci-verify',
+          )
+          verify_result = platform.run_job(verify_job['job_id'], 'ci-worker')
+          assert verify_result['status'] == 'SUCCEEDED', verify_result
+          assert verify_result['result']['status'] == 'VERIFIED', verify_result
+
+          create_job = platform.submit_job(
+              project_id,
+              'FACTORY_CREATE',
+              {
+                  'prompt': 'Build a multi-tenant operations platform with roles, subscriptions, an API, and a dashboard.',
+                  'name': 'Basalt Private Beta CI Product',
+                  'template': 'saas-starter',
+                  'sandbox': 'temp',
+              },
+              user_id,
+              idempotency_key='ci-factory-create',
+          )
+          create_result = platform.run_job(create_job['job_id'], 'ci-worker')
+          assert create_result['status'] == 'SUCCEEDED', create_result
+          assert create_result['result']['proof_status'] == 'VERIFIED', create_result
+          assert int(create_result['result']['proof_score']) >= 98, create_result
+
+          package_job = platform.submit_job(
+              project_id,
+              'PACKAGE_PREVIEW',
+              {
+                  'source_path': create_result['result']['target'],
+                  'proof_report': create_result['result']['proof_report'],
+                  'environment': 'preview',
+              },
+              user_id,
+              idempotency_key='ci-package-preview',
+          )
+          package_result = platform.run_job(package_job['job_id'], 'ci-worker')
+          assert package_result['status'] == 'SUCCEEDED', package_result
+          assert package_result['result']['status'] == 'PROMOTED', package_result
+          assert Path(package_result['result']['artifact_path']).exists()
+
+          snapshot = platform.write_snapshot(Path('.basalt/private-beta-ci-snapshot.json'))
+          print(f"Private-beta project: {project_id}")
+          print(f"Verified job: {verify_job['job_id']}")
+          print(f"Factory job: {create_job['job_id']}")
+          print(f"Deployment: {package_result['result']['deployment_id']}")
+          print(f"Snapshot: {snapshot}")
+          PY
+
+      - name: Smoke test private-beta Command Center API and official wordmark
+        run: |
+          python - <<'PY'
+          import json
+          import threading
+          from http.client import HTTPConnection
+          from pathlib import Path
+
+          from basalt_proof.command_center_server import create_command_center_server
+
+          server = create_command_center_server(Path('.'), host='127.0.0.1', port=0)
+          thread = threading.Thread(target=server.serve_forever, daemon=True)
+          thread.start()
+          try:
+              connection = HTTPConnection('127.0.0.1', server.server_address[1], timeout=10)
+              connection.request('GET', '/api/v1/beta')
+              response = connection.getresponse()
+              payload = json.loads(response.read().decode('utf-8'))
+              assert response.status == 200, response.status
+              assert payload['readiness']['persistent_projects'] is True
+              assert payload['readiness']['durable_jobs'] is True
+              assert payload['readiness']['production_cloud_deployments'] is False
+              connection.close()
+
+              connection = HTTPConnection('127.0.0.1', server.server_address[1], timeout=10)
+              connection.request('GET', '/assets/brand/basalt-wordmark-mask.png')
+              response = connection.getresponse()
+              body = response.read()
+              assert response.status == 200, response.status
+              assert response.getheader('Content-Type') == 'image/png'
+              assert len(body) > 128
+              connection.close()
+          finally:
+              server.shutdown()
+              server.server_close()
+              thread.join(timeout=3)
+          PY
+
+      - name: Upload private-beta artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-private-beta-${{ github.run_number }}-${{ github.run_attempt }}
+          path: .basalt/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -360,7 +538,7 @@ jobs:
   proof:
     name: Basalt Proof Gate
     runs-on: ubuntu-latest
-    needs: [unit-tests, knowledge-platform, safe-fix-platform, command-center-platform, software-factory-platform]
+    needs: [unit-tests, knowledge-platform, safe-fix-platform, command-center-platform, software-factory-platform, private-beta-platform]
     timeout-minutes: 20
 
     steps:
@@ -431,7 +609,7 @@ jobs:
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary_path:
               with open(summary_path, "a", encoding="utf-8") as summary:
-                  summary.write("# Basalt v2.4 Alpha AI Software Factory Report\n\n")
+                  summary.write("# Basalt v2.5 Private Beta Full Build System Report\n\n")
                   summary.write(f"- **Verdict:** `{status}`\n")
                   summary.write(f"- **Proof score:** `{score}/100`\n")
                   summary.write(f"- **Sandbox:** `{sandbox}`\n")
@@ -444,7 +622,7 @@ jobs:
                   summary.write(f"- **Edges:** `{edges}`\n")
                   summary.write(f"- **Features:** `{features}`\n")
                   summary.write(f"- **Test mappings:** `{test_mappings}`\n")
-                  summary.write("- **Phase 5 factory:** `intent + blueprint + prevention locks + epochs + agents + proof-backed assembly`\n")
+                  summary.write("- **Phase 6 private beta:** `projects + durable jobs + isolated workspaces + providers + verified deployment artifacts`\n")
 
           if status != "VERIFIED":
               print(f"ERROR: Repository verdict is {status}, not VERIFIED.")

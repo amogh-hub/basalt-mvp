@@ -42,6 +42,8 @@ from .report import write_json_report, write_markdown_report
 from .runner import docker_status
 from .design_system import audit_design_system, write_design_system_artifacts
 from .model_router import ModelRouter
+from .private_beta import PrivateBetaPlatform, PrivateBetaError
+from .job_queue import JobQueueError
 from .state_coordinator import ContractLockError, StateConflictError
 from .software_factory import (
     FactoryError,
@@ -54,7 +56,7 @@ from .software_factory import (
 )
 
 
-PRODUCT_NAME = "Basalt v2.4 Alpha AI Software Factory"
+PRODUCT_NAME = "Basalt v2.5 Private Beta Full Build System"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -213,7 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
     factory_plan.add_argument("repo", type=Path, nargs="?", default=Path("."))
     factory_plan.add_argument("--prompt", required=True, help="Product intent")
     factory_plan.add_argument("--name", required=True, help="Product name")
-    factory_plan.add_argument("--template", choices=["python-service", "fullstack-lite"], default="python-service")
+    factory_plan.add_argument("--template", choices=["python-service", "api-service", "fullstack-lite", "web-app", "saas-starter"], default="python-service")
     factory_plan.add_argument("--users", action="append", default=[], help="Target user; repeatable")
     factory_plan.add_argument("--constraint", action="append", default=[], help="Product or engineering constraint; repeatable")
     factory_plan.add_argument("--privacy", choices=["local", "private", "standard"], default="local")
@@ -233,7 +235,7 @@ def build_parser() -> argparse.ArgumentParser:
     factory_create.add_argument("--prompt", required=True, help="Product intent")
     factory_create.add_argument("--name", required=True, help="Product name")
     factory_create.add_argument("--target", type=Path, required=True)
-    factory_create.add_argument("--template", choices=["python-service", "fullstack-lite"], default="python-service")
+    factory_create.add_argument("--template", choices=["python-service", "api-service", "fullstack-lite", "web-app", "saas-starter"], default="python-service")
     factory_create.add_argument("--users", action="append", default=[])
     factory_create.add_argument("--constraint", action="append", default=[])
     factory_create.add_argument("--privacy", choices=["local", "private", "standard"], default="local")
@@ -255,6 +257,57 @@ def build_parser() -> argparse.ArgumentParser:
     factory_design.add_argument("repo", type=Path, nargs="?", default=Path("."))
     factory_design.add_argument("--out", type=Path, default=None)
     factory_design.add_argument("--json", action="store_true")
+
+    beta = subparsers.add_parser("beta", help="Operate the persistent private-beta workspace, jobs, providers, and deployments")
+    beta_commands = beta.add_subparsers(dest="beta_command")
+
+    beta_bootstrap = beta_commands.add_parser("bootstrap", help="Create the first private-beta user and team")
+    beta_bootstrap.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    beta_bootstrap.add_argument("--email", required=True)
+    beta_bootstrap.add_argument("--name", required=True, help="Display name")
+    beta_bootstrap.add_argument("--team", required=True, help="Team name")
+    beta_bootstrap.add_argument("--json", action="store_true")
+
+    beta_status = beta_commands.add_parser("status", help="Show the private-beta control-plane snapshot")
+    beta_status.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    beta_status.add_argument("--json", action="store_true")
+
+    beta_project = beta_commands.add_parser("project-add", help="Register a project in a private-beta team")
+    beta_project.add_argument("repo", type=Path, nargs="?", default=Path("."), help="Basalt repository")
+    beta_project.add_argument("--team-id", required=True)
+    beta_project.add_argument("--created-by", required=True)
+    beta_project.add_argument("--name", required=True)
+    beta_project.add_argument("--project-repo", type=Path, required=True)
+    beta_project.add_argument("--template", choices=["python-service", "api-service", "fullstack-lite", "web-app", "saas-starter"], default="fullstack-lite")
+    beta_project.add_argument("--privacy", choices=["local", "private", "standard"], default="local")
+    beta_project.add_argument("--json", action="store_true")
+
+    beta_submit = beta_commands.add_parser("job-submit", help="Submit a durable private-beta job")
+    beta_submit.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    beta_submit.add_argument("--project-id", required=True)
+    beta_submit.add_argument("--type", choices=["VERIFY_PROJECT", "FACTORY_PLAN", "FACTORY_CREATE", "PACKAGE_PREVIEW"], required=True)
+    beta_submit.add_argument("--created-by", required=True)
+    beta_submit.add_argument("--payload", default="{}", help="JSON object payload")
+    beta_submit.add_argument("--idempotency-key", default="")
+    beta_submit.add_argument("--json", action="store_true")
+
+    beta_run = beta_commands.add_parser("job-run", help="Run one queued private-beta job")
+    beta_run.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    beta_run.add_argument("job_id")
+    beta_run.add_argument("--worker", default="beta-cli-worker")
+    beta_run.add_argument("--json", action="store_true")
+
+    beta_jobs = beta_commands.add_parser("jobs", help="List durable private-beta jobs")
+    beta_jobs.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    beta_jobs.add_argument("--json", action="store_true")
+
+    beta_providers = beta_commands.add_parser("providers", help="Show secret-safe model provider inventory")
+    beta_providers.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    beta_providers.add_argument("--json", action="store_true")
+
+    beta_deployments = beta_commands.add_parser("deployments", help="List private-beta deployment records")
+    beta_deployments.add_argument("repo", type=Path, nargs="?", default=Path("."))
+    beta_deployments.add_argument("--json", action="store_true")
 
     command_center = subparsers.add_parser(
         "command-center",
@@ -812,7 +865,7 @@ def run_agent(args: argparse.Namespace) -> int:
 
 
 def _print_factory_run(run) -> None:
-    print("Basalt Alpha AI Software Factory")
+    print("Basalt Private Beta Full Build System")
     print(f"- run: {run.run_id}")
     print(f"- product: {run.product_name}")
     print(f"- template: {run.template}")
@@ -911,6 +964,50 @@ def run_factory(args: argparse.Namespace) -> int:
         return 1
 
 
+def run_beta(args: argparse.Namespace) -> int:
+    if not args.beta_command:
+        print("Choose one of: bootstrap, status, project-add, job-submit, job-run, jobs, providers, deployments", file=sys.stderr)
+        return 2
+    repo = args.repo.resolve()
+    platform = PrivateBetaPlatform(repo / ".basalt" / "private-beta")
+    try:
+        if args.beta_command == "bootstrap":
+            result = platform.bootstrap(args.email, args.name, args.team)
+        elif args.beta_command == "status":
+            result = platform.snapshot()
+        elif args.beta_command == "project-add":
+            result = platform.add_project(
+                args.team_id, args.name, args.project_repo, args.created_by, args.template, args.privacy
+            )
+        elif args.beta_command == "job-submit":
+            try:
+                payload = json.loads(args.payload)
+            except json.JSONDecodeError as exc:
+                raise ValueError("--payload must be valid JSON.") from exc
+            if not isinstance(payload, dict):
+                raise ValueError("--payload must be a JSON object.")
+            result = platform.submit_job(
+                args.project_id, args.type, payload, args.created_by, args.idempotency_key
+            )
+        elif args.beta_command == "job-run":
+            result = platform.run_job(args.job_id, args.worker)
+        elif args.beta_command == "jobs":
+            result = {"items": platform.jobs.list()}
+        elif args.beta_command == "providers":
+            result = platform.providers.snapshot()
+        else:
+            result = platform.deployments.snapshot()
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print("Basalt Private Beta")
+            print(json.dumps(result, indent=2))
+        return 0
+    except (PrivateBetaError, OSError, ValueError, JobQueueError) as exc:
+        print(f"Basalt private beta error: {exc}", file=sys.stderr)
+        return 1
+
+
 def run_command_center(args: argparse.Namespace) -> int:
     repo = args.repo.resolve()
     out_dir = args.out.resolve() if args.out else None
@@ -923,7 +1020,7 @@ def run_command_center(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(snapshot, indent=2))
         else:
-            print("Basalt v2.4 Alpha Software Factory Snapshot")
+            print("Basalt v2.5 Private Beta Snapshot")
             print(f"- project: {snapshot['project']['name']}")
             print(f"- verdict: {snapshot['truth']['status']}")
             print(f"- proof score: {snapshot['truth']['score']}/100")
@@ -1008,6 +1105,7 @@ def main(argv: list[str] | None = None) -> int:
         "agent": run_agent,
         "command-center": run_command_center,
         "factory": run_factory,
+        "beta": run_beta,
     }
     handler = handlers.get(args.command)
     if handler:

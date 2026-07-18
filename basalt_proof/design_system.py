@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -8,7 +9,7 @@ from pathlib import Path
 
 TOKENS = {
     "name": "Basalt Obsidian",
-    "version": "1.0",
+    "version": "1.1",
     "color": {
         "background": "#08090b",
         "surface": "#101318",
@@ -30,6 +31,14 @@ TOKENS = {
     "radius": {"small": "8px", "medium": "12px", "large": "18px", "panel": "22px"},
     "shadow": {"panel": "0 18px 60px rgba(0, 0, 0, 0.24)", "focus": "0 0 0 3px rgba(113, 133, 155, 0.25)"},
     "motion": {"fast": "120ms", "standard": "180ms", "slow": "260ms"},
+    "brand": {
+        "wordmark": "basalt_proof/webui/brand/basalt-wordmark-mask.png",
+        "dark_mode_color": "#f1f3f5",
+        "light_mode_color": "#08090b",
+        "background_dark": "#08090b",
+        "background_light": "#f7f7f5",
+        "rule": "The monochrome wordmark preserves its geometry and changes only foreground colour.",
+    },
     "principles": [
         "Stealth luxury and engineering precision.",
         "Truth before activity.",
@@ -89,12 +98,28 @@ def render_css_tokens() -> str:
 
 def audit_design_system(repo: Path) -> list[DesignFinding]:
     findings: list[DesignFinding] = []
-    targets = [*repo.rglob("*.css"), *repo.rglob("*.html"), *repo.rglob("*.js")]
-    excluded = {".git", ".venv", "venv", "node_modules", ".basalt"}
+    brand_root = repo / "basalt_proof" / "webui" / "brand"
+    required_brand_assets = {
+        "basalt-wordmark-mask.png",
+        "basalt-wordmark-dark.png",
+        "basalt-wordmark-light.png",
+        "basalt-mark-dark.png",
+        "basalt-mark-light.png",
+    }
+    for asset in sorted(required_brand_assets):
+        path = brand_root / asset
+        if not path.exists() or path.stat().st_size < 128:
+            findings.append(DesignFinding("HIGH", path.relative_to(repo).as_posix(), "brand_asset_missing", f"Required Basalt brand asset is missing or empty: {asset}."))
+    excluded = {".git", ".venv", "venv", "node_modules", ".basalt", "dist", "build"}
+    targets: list[Path] = []
+    for current_root, directory_names, file_names in os.walk(repo):
+        directory_names[:] = [name for name in directory_names if name not in excluded]
+        root_path = Path(current_root)
+        for file_name in file_names:
+            if Path(file_name).suffix.lower() in {".css", ".html", ".js"}:
+                targets.append(root_path / file_name)
     emoji_pattern = re.compile(r"[\U0001F300-\U0001FAFF]")
     for path in targets:
-        if any(part in excluded for part in path.parts):
-            continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         relative = path.relative_to(repo).as_posix()
         if "#d7ff4f" in text.lower() or "215,255,79" in text.replace(" ", ""):
@@ -105,6 +130,9 @@ def audit_design_system(repo: Path) -> list[DesignFinding]:
             findings.append(DesignFinding("MEDIUM", relative, "no_emoji_ui", "Emoji detected in product interface source."))
         if text.count("style=\"") + text.count("style='") > 3:
             findings.append(DesignFinding("LOW", relative, "token_governance", "Repeated inline styles should be converted to design tokens or classes."))
+    styles_path = repo / "basalt_proof" / "webui" / "styles.css"
+    if styles_path.exists() and "basalt-wordmark-mask.png" not in styles_path.read_text(encoding="utf-8", errors="ignore"):
+        findings.append(DesignFinding("MEDIUM", styles_path.relative_to(repo).as_posix(), "brand_not_integrated", "The official Basalt wordmark mask is not integrated into the Command Center."))
     return findings
 
 
@@ -119,7 +147,10 @@ def write_design_system_artifacts(repo: Path, out_dir: Path) -> list[Path]:
         "Basalt uses stealth luxury, dark operational control, and engineering precision.\n\n"
         "## Locked rules\n\n"
         + "\n".join(f"- {item}" for item in TOKENS["principles"])
-        + "\n",
+        + "\n\n## Official wordmark\n\n"
+        + "- Dark mode: soft off-white wordmark on obsidian.\n"
+        + "- Light mode: near-black wordmark on a soft light surface.\n"
+        + "- Geometry never changes; the mask inherits the interface foreground colour.\n",
         encoding="utf-8",
     )
     findings = audit_design_system(repo)
