@@ -207,6 +207,158 @@
       "tests": [
         "tests/test_phase4_command_center.py"
       ]
+    },
+    {
+      "id": "product-brain",
+      "name": "Product Brain",
+      "description": "Converts product intent into deterministic blueprints, requirements, user flows, risks, assumptions, success criteria, and architecture hints.",
+      "keywords": [
+        "product",
+        "intent",
+        "blueprint",
+        "requirement",
+        "risk"
+      ],
+      "files": [
+        "basalt_proof/product_brain.py",
+        "basalt_proof/factory_models.py"
+      ],
+      "tests": [
+        "tests/test_phase5_ai_software_factory.py"
+      ]
+    },
+    {
+      "id": "prevention-first-engineering",
+      "name": "Prevention-First Engineering",
+      "description": "Locks contracts, architecture decisions, risk controls, requirement-linked tests, and contradiction checks before implementation.",
+      "keywords": [
+        "prevention",
+        "contract",
+        "test plan",
+        "contradiction",
+        "engineering plan"
+      ],
+      "files": [
+        "basalt_proof/prevention_engine.py",
+        "basalt_proof/factory_models.py"
+      ],
+      "tests": [
+        "tests/test_phase5_ai_software_factory.py"
+      ]
+    },
+    {
+      "id": "deterministic-state-coordinator",
+      "name": "Deterministic State Coordinator",
+      "description": "Maintains monotonic project state, compare-and-swap transactions, contract locks, and stale-state rejection for factory runs.",
+      "keywords": [
+        "state",
+        "transaction",
+        "lock",
+        "compare and swap",
+        "coordination"
+      ],
+      "files": [
+        "basalt_proof/state_coordinator.py"
+      ],
+      "tests": [
+        "tests/test_phase5_ai_software_factory.py"
+      ]
+    },
+    {
+      "id": "epoch-planner-patch-aggregator",
+      "name": "Epoch Planner and Patch Aggregator",
+      "description": "Builds dependency-safe execution epochs and atomically groups proposals that intersect files or shared contracts.",
+      "keywords": [
+        "epoch",
+        "planner",
+        "dependency",
+        "patch",
+        "aggregate"
+      ],
+      "files": [
+        "basalt_proof/epoch_planner.py"
+      ],
+      "tests": [
+        "tests/test_phase5_ai_software_factory.py"
+      ]
+    },
+    {
+      "id": "heterogeneous-model-router",
+      "name": "Heterogeneous Model Router",
+      "description": "Routes work to the cheapest capable provider-neutral model while enforcing diverse review for high-risk tasks.",
+      "keywords": [
+        "model",
+        "router",
+        "cost",
+        "privacy",
+        "diversity"
+      ],
+      "files": [
+        "basalt_proof/model_router.py"
+      ],
+      "tests": [
+        "tests/test_phase5_ai_software_factory.py"
+      ]
+    },
+    {
+      "id": "specialist-agent-orchestrator",
+      "name": "Specialist Agent Orchestrator",
+      "description": "Coordinates accountable product, architecture, UI, frontend, backend, testing, security, review, documentation, performance, and DevOps roles.",
+      "keywords": [
+        "agent",
+        "orchestrator",
+        "specialist",
+        "role",
+        "workflow"
+      ],
+      "files": [
+        "basalt_proof/software_factory.py",
+        "basalt_proof/epoch_planner.py",
+        "basalt_proof/model_router.py"
+      ],
+      "tests": [
+        "tests/test_phase5_ai_software_factory.py"
+      ]
+    },
+    {
+      "id": "proof-backed-factory-assembly",
+      "name": "Proof-Backed Factory Assembly",
+      "description": "Plans, stages, builds, verifies, and atomically assembles supported alpha products only after a VERIFIED proof result.",
+      "keywords": [
+        "factory",
+        "build",
+        "assemble",
+        "verified",
+        "rollback"
+      ],
+      "files": [
+        "basalt_proof/software_factory.py",
+        "basalt_proof/cli.py"
+      ],
+      "tests": [
+        "tests/test_phase5_ai_software_factory.py"
+      ]
+    },
+    {
+      "id": "basalt-obsidian-design-system",
+      "name": "Basalt Obsidian Design System",
+      "description": "Locks the stealth dark Basalt visual language and audits UI code for lime, emoji, external assets, and token drift.",
+      "keywords": [
+        "design",
+        "obsidian",
+        "tokens",
+        "ui",
+        "audit"
+      ],
+      "files": [
+        "basalt_proof/design_system.py",
+        "basalt_proof/webui/styles.css",
+        "basalt_proof/webui/index.html",
+        "basalt_proof/webui/app.js"
+      ],
+      "tests": [
+        "tests/test_phase5_ai_software_factory.py"
+      ]
     }
   ]
 }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 import threading
 from collections import Counter
 from dataclasses import asdict
@@ -24,6 +25,13 @@ from .knowledge_graph import analyze_impact, build_project_graph, render_impact_
 from .proof import verify_repo
 from .report import write_json_report, write_markdown_report
 from .dashboard import write_dashboard
+from .software_factory import (
+    build_factory_run,
+    factory_snapshot,
+    list_factory_runs,
+    load_factory_run,
+    plan_factory_run,
+)
 
 
 COMMAND_CENTER_API_VERSION = "v1"
@@ -148,6 +156,9 @@ class CommandCenterService:
     def recent_runs(self) -> list[dict[str, Any]]:
         return list_agent_runs(self.repo, self.out_dir)
 
+    def recent_factory_runs(self) -> list[dict[str, Any]]:
+        return list_factory_runs(self.repo, self.out_dir)
+
     def artifacts(self) -> list[dict[str, Any]]:
         allowed_names = {
             "proof-report.json",
@@ -162,6 +173,9 @@ class CommandCenterService:
             "context-pack.md",
             "context-manifest.json",
             "command-center-snapshot.json",
+            "basalt-design-tokens.json",
+            "basalt-design-system.md",
+            "design-system-audit.json",
         }
         results: list[dict[str, Any]] = []
         for name in sorted(allowed_names):
@@ -186,6 +200,20 @@ class CommandCenterService:
                     {
                         "id": f"run:{run_id}",
                         "name": f"Agent run {run_id}",
+                        "path": _safe_relative(run_file, self.repo),
+                        "size_bytes": run_file.stat().st_size,
+                        "modified_at": datetime.fromtimestamp(run_file.stat().st_mtime, timezone.utc).isoformat(),
+                        "mime_type": "application/json",
+                    }
+                )
+        factory_root = self.out_dir / "factory-runs"
+        if factory_root.exists():
+            for run_file in sorted(factory_root.glob("*/run.json"), key=lambda item: item.stat().st_mtime, reverse=True)[:20]:
+                run_id = run_file.parent.name
+                results.append(
+                    {
+                        "id": f"factory:{run_id}",
+                        "name": f"Factory run {run_id}",
                         "path": _safe_relative(run_file, self.repo),
                         "size_bytes": run_file.stat().st_size,
                         "modified_at": datetime.fromtimestamp(run_file.stat().st_mtime, timezone.utc).isoformat(),
@@ -226,7 +254,9 @@ class CommandCenterService:
             graph = self.ensure_graph()
             report = self.proof_report()
             runs = self.recent_runs()
+            factory_runs = self.recent_factory_runs()
             status_counts = Counter(str(item.get("status", "UNKNOWN")) for item in runs)
+            factory_status_counts = Counter(str(item.get("status", "UNKNOWN")) for item in factory_runs)
             pending = [item for item in runs if str(item.get("status")) == "AWAITING_APPROVAL"]
             verified = [item for item in runs if str(item.get("status")) == "VERIFIED"]
             rolled_back = [item for item in runs if str(item.get("status")) == "ROLLED_BACK"]
@@ -234,7 +264,7 @@ class CommandCenterService:
             return {
                 "api_version": COMMAND_CENTER_API_VERSION,
                 "generated_at": _now(),
-                "platform": "Basalt v2.3 Alpha Command Center",
+                "platform": "Basalt v2.4 Alpha AI Software Factory",
                 "project": {
                     "name": project_name,
                     "path": str(self.repo),
@@ -247,8 +277,8 @@ class CommandCenterService:
                     "risk": _risk_level(report, runs),
                     "graph_fresh": bool(graph.fresh),
                     "last_verified_at": str(report.get("finished_at", "")),
-                    "intent": "Verify and safely evolve this repository through proof-backed changes.",
-                    "current_phase": "Command Center",
+                    "intent": "Plan, build, prove, and safely evolve software through governed factory transactions.",
+                    "current_phase": "Alpha AI Software Factory",
                 },
                 "proof": _proof_metrics(report),
                 "graph": _graph_metrics(graph),
@@ -260,14 +290,23 @@ class CommandCenterService:
                     "status_counts": dict(status_counts),
                     "recent": runs[:12],
                 },
+                "factory": {
+                    "total": len(factory_runs),
+                    "verified": factory_status_counts.get("VERIFIED", 0),
+                    "blocked": factory_status_counts.get("BLOCKED", 0),
+                    "rolled_back": factory_status_counts.get("ROLLED_BACK", 0),
+                    "status_counts": dict(factory_status_counts),
+                    "recent": factory_runs[:12],
+                    "supported_templates": ["python-service", "fullstack-lite"],
+                },
                 "artifacts": {"count": len(self.artifacts()), "items": self.artifacts()},
                 "roadmap": [
                     {"phase": 0, "name": "Vision + Grant/Demo MVP", "status": "COMPLETE"},
                     {"phase": 1, "name": "Alpha Proof Platform", "status": "COMPLETE"},
                     {"phase": 2, "name": "Knowledge Graph + Context Compiler", "status": "COMPLETE"},
                     {"phase": 3, "name": "Agent-Assisted Safe Fixes", "status": "COMPLETE"},
-                    {"phase": 4, "name": "Command Center Web App", "status": "ACTIVE"},
-                    {"phase": 5, "name": "Alpha AI Software Factory", "status": "UPCOMING"},
+                    {"phase": 4, "name": "Command Center Web App", "status": "COMPLETE"},
+                    {"phase": 5, "name": "Alpha AI Software Factory", "status": "ACTIVE"},
                     {"phase": 6, "name": "Private Beta Full Build System", "status": "UPCOMING"},
                     {"phase": 7, "name": "Production Basalt v1", "status": "UPCOMING"},
                     {"phase": 8, "name": "Full Basalt Final Vision", "status": "UPCOMING"},
@@ -326,6 +365,52 @@ class CommandCenterService:
             data = asdict(pack)
             data["artifacts"] = [str(item) for item in artifacts]
             return data
+
+    def factory_runs(self) -> list[dict[str, Any]]:
+        return self.recent_factory_runs()
+
+    def factory_run_detail(self, run_id: str) -> dict[str, Any]:
+        return load_factory_run(self.repo, run_id, self.out_dir).to_dict()
+
+    def factory_state(self) -> dict[str, Any]:
+        return factory_snapshot(self.repo, self.out_dir)
+
+    def factory_plan(
+        self,
+        prompt: str,
+        name: str,
+        template: str = "python-service",
+        users: list[str] | None = None,
+        constraints: list[str] | None = None,
+        privacy: str = "local",
+    ) -> dict[str, Any]:
+        if not prompt.strip() or not name.strip():
+            raise ValueError("Product name and product intent are required.")
+        with self._lock:
+            run = plan_factory_run(
+                self.repo,
+                prompt.strip(),
+                name.strip(),
+                template=template,
+                target_users=users or [],
+                constraints=constraints or [],
+                privacy_mode=privacy,
+                out_dir=self.out_dir,
+            )
+            return run.to_dict()
+
+    def factory_build(self, run_id: str, sandbox: str = "temp") -> dict[str, Any]:
+        run = load_factory_run(self.repo, run_id, self.out_dir)
+        safe_name = re.sub(r"[^a-z0-9]+", "-", run.product_name.lower()).strip("-") or run.run_id
+        target = self.out_dir / "factory-products" / safe_name
+        with self._lock:
+            return build_factory_run(
+                self.repo,
+                run_id,
+                target,
+                sandbox=sandbox,
+                out_dir=self.out_dir,
+            ).to_dict()
 
     def verify(self, sandbox: str | None = None) -> dict[str, Any]:
         if sandbox not in {None, "auto", "temp", "docker"}:

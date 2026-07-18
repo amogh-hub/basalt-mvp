@@ -4,6 +4,8 @@ const state = {
   overview: null,
   proof: null,
   bootstrap: { actions_enabled: false, action_token: "" },
+  factory: null,
+  selectedFactoryRun: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -124,6 +126,11 @@ function renderOverview(data) {
   text("transaction-count", `${data.transactions.total} total`);
   text("approval-count", `${data.approvals.pending} pending`);
   text("artifact-count", `${data.artifacts.count} artifacts`);
+  text("factory-total", data.factory?.total || 0);
+  text("factory-verified", data.factory?.verified || 0);
+  text("factory-blocked", data.factory?.blocked || 0);
+  text("factory-rolled-back", data.factory?.rolled_back || 0);
+  text("factory-run-count", `${data.factory?.total || 0} runs`);
 
   renderRoadmap(data.roadmap || []);
   const recent = byId("recent-runs");
@@ -139,6 +146,148 @@ function renderOverview(data) {
   renderApprovals(data.approvals.items || []);
   renderArtifacts(data.artifacts.items || []);
   renderLanguages(data.graph.languages || {});
+  renderFactoryRuns(data.factory?.recent || []);
+}
+
+function renderFactoryRuns(runs) {
+  const body = byId("factory-runs-table");
+  if (!body) return;
+  clear(body);
+  if (!runs.length) {
+    const row = document.createElement("tr");
+    const cell = element("td", "empty-state", "No factory runs recorded.");
+    cell.colSpan = 5;
+    row.append(cell);
+    body.append(row);
+    return;
+  }
+  runs.forEach((item) => {
+    const row = document.createElement("tr");
+    row.append(element("td", "", item.product_name || item.run_id));
+    const statusCell = document.createElement("td");
+    statusCell.append(element("span", `status-mini ${item.status || ""}`, item.status || "UNKNOWN"));
+    row.append(statusCell);
+    row.append(element("td", "", item.proof_status ? `${item.proof_status} ${item.proof_score || 0}/100` : "Not run"));
+    row.append(element("td", "", formatDate(item.updated_at)));
+    const actionCell = document.createElement("td");
+    const inspect = element("button", "text-button", "Inspect");
+    inspect.type = "button";
+    inspect.addEventListener("click", () => showFactoryRun(item.run_id));
+    actionCell.append(inspect);
+    row.append(actionCell);
+    body.append(row);
+  });
+}
+
+function renderFactoryState(data) {
+  state.factory = data;
+  text("factory-state-version", `state ${data.current_state?.version ?? 0}`);
+  const inventory = byId("model-inventory");
+  clear(inventory);
+  const models = data.models || [];
+  if (!models.length) {
+    inventory.className = "stack-list empty-state";
+    inventory.textContent = "No model profiles loaded.";
+  } else {
+    inventory.className = "stack-list";
+    models.forEach((item) => {
+      const card = element("div", "stack-item");
+      card.append(element("strong", "", `${item.provider}/${item.model}`));
+      card.append(element("p", "", `${item.available ? "Available" : "Not configured"} · ${item.privacy_modes.join(", ")} · ${item.capabilities.join(", ")}`));
+      inventory.append(card);
+    });
+  }
+}
+
+function renderFactoryDetail(run) {
+  state.selectedFactoryRun = run;
+  text("factory-detail-title", `${run.product_name} · ${run.run_id}`);
+  const container = byId("factory-detail");
+  clear(container);
+  const entries = [
+    ["Status", run.status], ["Template", run.template], ["Base state", run.base_state_version],
+    ["Committed state", run.committed_state_version || "—"], ["Tasks", (run.tasks || []).length],
+    ["Epochs", (run.epochs || []).length], ["Proof", run.proof_status ? `${run.proof_status} ${run.proof_score}/100` : "Not run"],
+    ["Target", run.target_path || "Not assembled"], ["Message", run.message],
+  ];
+  entries.forEach(([label, value]) => {
+    const card = element("div", "detail-card");
+    card.append(element("span", "", label), element("strong", "", value));
+    container.append(card);
+  });
+  const actions = byId("factory-detail-actions");
+  clear(actions);
+  if (run.status === "PLANNED") {
+    const build = element("button", "button primary", "Build and prove");
+    build.type = "button";
+    build.disabled = !state.bootstrap.actions_enabled;
+    build.addEventListener("click", () => buildFactoryRun(run.run_id));
+    actions.append(build);
+  }
+  byId("factory-detail-panel").classList.remove("hidden");
+  renderPlan(run);
+  renderAgentRecords(run.agent_records || []);
+}
+
+function renderPlan(run) {
+  const epochGrid = byId("epoch-grid");
+  clear(epochGrid);
+  (run.epochs || []).forEach((epoch) => {
+    const card = element("article", "epoch-card");
+    card.append(element("span", "", `EPOCH ${epoch.number}`));
+    card.append(element("h3", "", epoch.name));
+    card.append(element("p", "", epoch.purpose));
+    card.append(element("strong", "", `${(epoch.task_ids || []).length} tasks · ${epoch.status}`));
+    epochGrid.append(card);
+  });
+  const body = byId("factory-task-table");
+  clear(body);
+  (run.tasks || []).forEach((task) => {
+    const row = document.createElement("tr");
+    row.append(element("td", "", `${task.task_id} · ${task.title}`));
+    row.append(element("td", "", `${task.epoch} · ${task.epoch_name}`));
+    row.append(element("td", "", task.agent_role));
+    row.append(element("td", "", task.risk_level));
+    const statusCell = document.createElement("td");
+    statusCell.append(element("span", `status-mini ${task.status || ""}`, task.status || "PLANNED"));
+    row.append(statusCell);
+    body.append(row);
+  });
+}
+
+function renderAgentRecords(records) {
+  const container = byId("agent-execution-list");
+  clear(container);
+  if (!records.length) {
+    container.className = "stack-list empty-state";
+    container.textContent = "The selected plan has not executed yet.";
+    return;
+  }
+  container.className = "stack-list";
+  records.forEach((item) => {
+    const card = element("div", "stack-item");
+    card.append(element("strong", "", `${item.agent_role} · ${item.status}`));
+    const model = item.model_assignment?.model || "deterministic";
+    card.append(element("p", "", `${item.summary} · model ${model}`));
+    container.append(card);
+  });
+}
+
+async function showFactoryRun(runId) {
+  try {
+    const run = await api(`/api/v1/factory/runs/${encodeURIComponent(runId)}`);
+    renderFactoryDetail(run);
+    switchView("factory");
+  } catch (error) { banner(error.message, "bad"); }
+}
+
+async function buildFactoryRun(runId) {
+  try {
+    const result = await api(`/api/v1/factory/runs/${encodeURIComponent(runId)}/build`, { method: "POST", body: JSON.stringify({ sandbox: "temp" }), action: true });
+    banner(result.status === "VERIFIED" ? "Factory product verified and assembled." : `Factory returned ${result.status}.`, result.status === "VERIFIED" ? "good" : "bad");
+    await loadAll();
+    renderFactoryDetail(result);
+  } catch (error) { banner(error.message, "bad"); }
 }
 
 function renderProof(report) {
@@ -445,9 +594,10 @@ async function submitAction(event) {
 
 async function loadAll() {
   try {
-    const [overview, proof] = await Promise.all([api("/api/v1/overview"), api("/api/v1/proof")]);
+    const [overview, proof, factory] = await Promise.all([api("/api/v1/overview"), api("/api/v1/proof"), api("/api/v1/factory")]);
     renderOverview(overview);
     renderProof(proof || {});
+    renderFactoryState(factory || {});
   } catch (error) {
     banner(error.message, "bad");
   }
@@ -490,6 +640,28 @@ byId("context-form").addEventListener("submit", async (event) => {
   } catch (error) { banner(error.message, "bad"); }
 });
 
+byId("factory-plan-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const users = byId("factory-users").value.split(",").map((item) => item.trim()).filter(Boolean);
+  const constraints = byId("factory-constraints").value.split("\n").map((item) => item.trim()).filter(Boolean);
+  try {
+    const run = await api("/api/v1/factory/plan", {
+      method: "POST",
+      action: true,
+      body: JSON.stringify({
+        name: byId("factory-name").value,
+        prompt: byId("factory-prompt").value,
+        template: byId("factory-template").value,
+        users, constraints, privacy: byId("factory-privacy").value,
+      }),
+    });
+    banner("Governed factory plan created.");
+    await loadAll();
+    renderFactoryDetail(run);
+  } catch (error) { banner(error.message, "bad"); }
+});
+byId("close-factory-detail").addEventListener("click", () => byId("factory-detail-panel").classList.add("hidden"));
+
 const initialSection = window.location.hash.slice(1);
-if (["overview", "proof", "graph", "transactions", "approvals", "evidence"].includes(initialSection)) switchView(initialSection);
+if (["overview", "factory", "plan", "agents", "proof", "graph", "transactions", "approvals", "evidence"].includes(initialSection)) switchView(initialSection);
 initialize();

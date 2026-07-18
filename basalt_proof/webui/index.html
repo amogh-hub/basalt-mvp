@@ -4,23 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Basalt Command Center</title>
+  <title>Basalt AI Software Factory</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Primary navigation">
-      <a class="brand" href="#overview" aria-label="Basalt Command Center home">
+      <a class="brand" href="#overview" aria-label="Basalt AI Software Factory home">
         <span class="brand-mark">B</span>
-        <span><strong>BASALT</strong><small>COMMAND CENTER</small></span>
+        <span><strong>BASALT</strong><small>SOFTWARE FACTORY</small></span>
       </a>
       <nav id="main-nav">
         <a class="nav-item active" href="#overview" data-section="overview"><span>01</span>Overview</a>
-        <a class="nav-item" href="#proof" data-section="proof"><span>02</span>Proof</a>
-        <a class="nav-item" href="#graph" data-section="graph"><span>03</span>Knowledge</a>
-        <a class="nav-item" href="#transactions" data-section="transactions"><span>04</span>Transactions</a>
-        <a class="nav-item" href="#approvals" data-section="approvals"><span>05</span>Approvals</a>
-        <a class="nav-item" href="#evidence" data-section="evidence"><span>06</span>Evidence</a>
+        <a class="nav-item" href="#factory" data-section="factory"><span>02</span>Factory</a>
+        <a class="nav-item" href="#plan" data-section="plan"><span>03</span>Plan</a>
+        <a class="nav-item" href="#agents" data-section="agents"><span>04</span>Agents</a>
+        <a class="nav-item" href="#proof" data-section="proof"><span>05</span>Proof</a>
+        <a class="nav-item" href="#graph" data-section="graph"><span>06</span>Knowledge</a>
+        <a class="nav-item" href="#transactions" data-section="transactions"><span>07</span>Transactions</a>
+        <a class="nav-item" href="#approvals" data-section="approvals"><span>08</span>Approvals</a>
+        <a class="nav-item" href="#evidence" data-section="evidence"><span>09</span>Evidence</a>
       </nav>
       <div class="sidebar-footer">
         <div class="mode-indicator"><span id="mode-dot"></span><span id="mode-label">Read-only</span></div>
@@ -72,13 +75,62 @@
 
         <div class="two-column">
           <article class="panel">
-            <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h3>Roadmap state</h3></div><span class="panel-chip">Phase 4</span></div>
+            <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h3>Roadmap state</h3></div><span class="panel-chip">Phase 5</span></div>
             <div id="roadmap-list" class="roadmap-list"></div>
           </article>
           <article class="panel">
             <div class="panel-heading"><div><p class="eyebrow">ACTIVITY</p><h3>Recent state transactions</h3></div><button class="text-button" data-jump="transactions" type="button">View all</button></div>
             <div id="recent-runs" class="activity-list empty-state">No agent transactions yet.</div>
           </article>
+        </div>
+      </section>
+
+
+      <section id="factory" class="view" aria-labelledby="factory-title">
+        <div class="section-heading"><div><p class="eyebrow">PRODUCT BRAIN</p><h2 id="factory-title">Create a proof-backed product</h2><p class="muted">Intent becomes locked requirements, dependency-safe epochs, governed agent work, and verified assembly.</p></div><span class="panel-chip">Alpha factory</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Factory runs</p><strong id="factory-total">0</strong></article>
+          <article class="metric-card"><p>Verified products</p><strong id="factory-verified">0</strong></article>
+          <article class="metric-card"><p>Blocked plans</p><strong id="factory-blocked">0</strong></article>
+          <article class="metric-card"><p>Rolled back</p><strong id="factory-rolled-back">0</strong></article>
+        </div>
+        <div class="two-column factory-layout">
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">INTENT INTAKE</p><h3>Define the product</h3></div></div>
+            <form id="factory-plan-form" class="tool-form">
+              <label>Product name<input id="factory-name" required maxlength="80" placeholder="Venue Core"></label>
+              <label>Product intent<textarea id="factory-prompt" required rows="6" placeholder="Build a booking platform with authentication, owner dashboards, notifications, and an API."></textarea></label>
+              <label>Template<select id="factory-template"><option value="fullstack-lite">Full-stack lite</option><option value="python-service">Python service</option></select></label>
+              <label>Target users, comma separated<input id="factory-users" placeholder="Venue owners, customers"></label>
+              <label>Constraints, one per line<textarea id="factory-constraints" rows="3" placeholder="No production secrets
+Local verification only"></textarea></label>
+              <label>Privacy mode<select id="factory-privacy"><option value="local">Local</option><option value="private">Private</option><option value="standard">Standard</option></select></label>
+              <button class="button primary" type="submit">Create governed plan</button>
+            </form>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">FACTORY LEDGER</p><h3>Recent product runs</h3></div><span id="factory-run-count" class="panel-chip">0 runs</span></div>
+            <div class="table-wrap"><table><thead><tr><th>Product</th><th>Status</th><th>Proof</th><th>Updated</th><th></th></tr></thead><tbody id="factory-runs-table"></tbody></table></div>
+          </article>
+        </div>
+        <article id="factory-detail-panel" class="panel hidden">
+          <div class="panel-heading"><div><p class="eyebrow">FACTORY RUN</p><h3 id="factory-detail-title">Run detail</h3></div><button id="close-factory-detail" class="text-button" type="button">Close</button></div>
+          <div id="factory-detail" class="detail-grid"></div>
+          <div id="factory-detail-actions" class="dialog-actions"></div>
+        </article>
+      </section>
+
+      <section id="plan" class="view" aria-labelledby="plan-title">
+        <div class="section-heading"><div><p class="eyebrow">PREVENTION-FIRST ENGINEERING</p><h2 id="plan-title">Dependency-safe execution plan</h2></div><span id="factory-state-version" class="mono-chip">state 0</span></div>
+        <div id="epoch-grid" class="epoch-grid"></div>
+        <article class="panel"><div class="panel-heading"><div><p class="eyebrow">TASK GRAPH</p><h3>Specialist assignments</h3></div></div><div class="table-wrap"><table><thead><tr><th>Task</th><th>Epoch</th><th>Agent</th><th>Risk</th><th>Status</th></tr></thead><tbody id="factory-task-table"></tbody></table></div></article>
+      </section>
+
+      <section id="agents" class="view" aria-labelledby="agents-title">
+        <div class="section-heading"><div><p class="eyebrow">GOVERNED ORCHESTRATION</p><h2 id="agents-title">Specialist agents and model routing</h2><p class="muted">Agents operate within capability scopes. Models are routed by task, privacy, cost, and review diversity.</p></div></div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">MODEL INVENTORY</p><h3>Available routing profiles</h3></div></div><div id="model-inventory" class="stack-list empty-state">No model profiles loaded.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">AGENT EXECUTION</p><h3>Latest accountable work</h3></div></div><div id="agent-execution-list" class="stack-list empty-state">Select a factory run to inspect agent work.</div></article>
         </div>
       </section>
 

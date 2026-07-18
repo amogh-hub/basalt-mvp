@@ -123,7 +123,8 @@ class CommandCenterServiceTests(unittest.TestCase):
             self.assertTrue(overview["truth"]["graph_fresh"])
             self.assertGreater(overview["graph"]["symbols"], 0)
             self.assertEqual(overview["proof"]["checks"]["passed"], 2)
-            self.assertEqual(overview["roadmap"][4]["status"], "ACTIVE")
+            self.assertEqual(overview["roadmap"][4]["status"], "COMPLETE")
+            self.assertEqual(overview["roadmap"][5]["status"], "ACTIVE")
 
     def test_overview_without_proof_report_is_safe(self):
         with tempfile.TemporaryDirectory() as td:
@@ -187,7 +188,7 @@ class CommandCenterServerTests(unittest.TestCase):
                 self.assertEqual(headers["X-Frame-Options"], "DENY")
                 status, headers, page = request(server, "GET", "/")
                 self.assertEqual(status, 200)
-                self.assertIn("Basalt Command Center", page)
+                self.assertIn("Basalt AI Software Factory", page)
                 self.assertIn("default-src 'self'", headers["Content-Security-Policy"])
 
     def test_bootstrap_never_enables_actions_by_default(self):
