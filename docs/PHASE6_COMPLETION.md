@@ -16,7 +16,7 @@ Phase 6 is complete when the private-beta branch passes local and GitHub validat
 
 ## Acceptance criteria
 
-- all 186 automated tests pass
+- all 187 automated tests pass
 - 102 critical proof-matrix tests pass
 - graph is fresh
 - design/brand audit has no blocking finding

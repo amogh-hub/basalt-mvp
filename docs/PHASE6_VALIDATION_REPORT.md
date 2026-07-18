@@ -8,7 +8,7 @@
 - Phase 4: 20 tests
 - Phase 5: 37 tests
 - Phase 6: 52 tests
-- Total: 186 tests
+- Total: 187 tests
 
 The Phase 6-specific suite validates workspace roles, project persistence, durable jobs, provider safety, compatible-provider requests, workspace isolation, deployment integrity, private-beta orchestration, factory expansion, CLI commands, Command Center APIs, and official brand assets.
 

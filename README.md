@@ -1,6 +1,6 @@
 # Basalt v2.5 Private Beta Full Build System
 
-**Version:** `2.5.0b1`
+**Version:** `2.5.0b3`
 **Core promise:** **Verified software, not vibes.**
 
 Basalt is a proof-first, prevention-first AI software factory. Phase 6 turns the bounded local alpha factory into a persistent private-beta control plane with projects, team roles, durable jobs, isolated workspaces, provider integrations, broader product templates, verified deployment artifacts, and an expanded Command Center.

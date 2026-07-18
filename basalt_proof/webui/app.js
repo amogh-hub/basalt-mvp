@@ -138,7 +138,7 @@ function renderOverview(data) {
   clear(recent);
   if (!data.transactions.recent.length) {
     recent.className = "activity-list empty-state";
-    recent.textContent = "No agent transactions yet.";
+    recent.textContent = "No governed transactions yet.";
   } else {
     recent.className = "activity-list";
     data.transactions.recent.slice(0, 5).forEach((item) => recent.append(runRow(item, true)));
@@ -358,13 +358,14 @@ function renderRuns(runs) {
   if (!runs.length) {
     const row = document.createElement("tr");
     const cell = element("td", "empty-state", "No governed transactions recorded.");
-    cell.colSpan = 6;
+    cell.colSpan = 7;
     row.append(cell);
     body.append(row);
     return;
   }
   runs.forEach((item) => {
     const row = document.createElement("tr");
+    row.append(element("td", "", item.kind === "factory" ? "Factory" : "Agent"));
     row.append(element("td", "", item.run_id || "—"));
     row.append(element("td", "", item.task || "—"));
     const statusCell = document.createElement("td");
@@ -375,57 +376,79 @@ function renderRuns(runs) {
     const actionCell = document.createElement("td");
     const button = element("button", "text-button", "Inspect");
     button.type = "button";
-    button.addEventListener("click", () => showRun(item.run_id));
+    button.addEventListener("click", () => showTransaction(item));
     actionCell.append(button);
     row.append(actionCell);
     body.append(row);
   });
 }
 
-async function showRun(runId) {
+function appendTransactionEntries(container, entries) {
+  entries.forEach(([label, value]) => {
+    const card = element("div", "detail-card");
+    card.append(element("span", "", label));
+    card.append(element("strong", "", value === 0 ? "0" : (value || "—")));
+    container.append(card);
+  });
+}
+
+async function showTransaction(item) {
   try {
-    const run = await api(`/api/v1/runs/${encodeURIComponent(runId)}`);
-    text("run-detail-title", run.run_id);
     const container = byId("run-detail");
     clear(container);
-    const entries = [
-      ["Status", run.status], ["Task", run.task], ["Role", run.agent_role],
-      ["Base state", shortHash(run.base_state_hash)], ["Current state", shortHash(run.current_state_hash)],
-      ["Attempt", `${run.attempt}/${run.max_attempts}`], ["Files", (run.impacted_files || []).length],
-      ["Tests", (run.impacted_tests || []).length], ["Features", (run.impacted_features || []).length],
-      ["Message", run.message], ["Created", formatDate(run.created_at)], ["Updated", formatDate(run.updated_at)],
-    ];
-    entries.forEach(([label, value]) => {
-      const card = element("div", "detail-card");
-      card.append(element("span", "", label));
-      card.append(element("strong", "", value || "—"));
-      container.append(card);
-    });
-    const actions = element("div", "approval-actions");
-    if (run.status === "AWAITING_APPROVAL") {
-      const approve = element("button", "button primary", "Approve");
-      approve.type = "button";
-      approve.disabled = !state.bootstrap.actions_enabled;
-      approve.addEventListener("click", () => openActionDialog("approve", run.run_id));
-      const reject = element("button", "button secondary", "Reject");
-      reject.type = "button";
-      reject.disabled = !state.bootstrap.actions_enabled;
-      reject.addEventListener("click", () => openActionDialog("reject", run.run_id));
-      actions.append(approve, reject);
-    } else if (run.status === "APPROVED") {
-      const apply = element("button", "button primary", "Apply and prove");
-      apply.type = "button";
-      apply.disabled = !state.bootstrap.actions_enabled;
-      apply.addEventListener("click", () => openActionDialog("apply", run.run_id));
-      actions.append(apply);
-    } else if (run.status === "VERIFIED") {
-      const rollback = element("button", "button secondary", "Rollback transaction");
-      rollback.type = "button";
-      rollback.disabled = !state.bootstrap.actions_enabled;
-      rollback.addEventListener("click", () => openActionDialog("rollback", run.run_id));
-      actions.append(rollback);
+    if (item.kind === "factory") {
+      const run = await api(`/api/v1/factory/runs/${encodeURIComponent(item.run_id)}`);
+      text("run-detail-title", `${run.product_name || "Factory"} · state transaction`);
+      appendTransactionEntries(container, [
+        ["Type", "Factory state commit"],
+        ["Status", item.status || run.status],
+        ["Product", run.product_name],
+        ["Base state", item.base_version],
+        ["Committed state", item.result_version ?? run.committed_state_version],
+        ["Tasks", (run.tasks || []).length],
+        ["Epochs", (run.epochs || []).length],
+        ["Proof", run.proof_status ? `${run.proof_status} ${run.proof_score}/100` : "Not run"],
+        ["Target", run.target_path],
+        ["Updated", formatDate(item.updated_at || run.updated_at)],
+        ["Rollback", "Not exposed for factory state in Phase 6; generated output remains isolated."],
+      ]);
+    } else {
+      const run = await api(`/api/v1/runs/${encodeURIComponent(item.run_id)}`);
+      text("run-detail-title", run.run_id);
+      appendTransactionEntries(container, [
+        ["Type", "Agent patch transaction"],
+        ["Status", run.status], ["Task", run.task], ["Role", run.agent_role],
+        ["Base state", shortHash(run.base_state_hash)], ["Current state", shortHash(run.current_state_hash)],
+        ["Attempt", `${run.attempt}/${run.max_attempts}`], ["Files", (run.impacted_files || []).length],
+        ["Tests", (run.impacted_tests || []).length], ["Features", (run.impacted_features || []).length],
+        ["Message", run.message], ["Created", formatDate(run.created_at)], ["Updated", formatDate(run.updated_at)],
+      ]);
+      const actions = element("div", "approval-actions");
+      if (run.status === "AWAITING_APPROVAL") {
+        const approve = element("button", "button primary", "Approve");
+        approve.type = "button";
+        approve.disabled = !state.bootstrap.actions_enabled;
+        approve.addEventListener("click", () => openActionDialog("approve", run.run_id));
+        const reject = element("button", "button secondary", "Reject");
+        reject.type = "button";
+        reject.disabled = !state.bootstrap.actions_enabled;
+        reject.addEventListener("click", () => openActionDialog("reject", run.run_id));
+        actions.append(approve, reject);
+      } else if (run.status === "APPROVED") {
+        const apply = element("button", "button primary", "Apply and prove");
+        apply.type = "button";
+        apply.disabled = !state.bootstrap.actions_enabled;
+        apply.addEventListener("click", () => openActionDialog("apply", run.run_id));
+        actions.append(apply);
+      } else if (run.status === "VERIFIED") {
+        const rollback = element("button", "button secondary", "Rollback transaction");
+        rollback.type = "button";
+        rollback.disabled = !state.bootstrap.actions_enabled;
+        rollback.addEventListener("click", () => openActionDialog("rollback", run.run_id));
+        actions.append(rollback);
+      }
+      if (actions.childElementCount) container.append(actions);
     }
-    if (actions.childElementCount) container.append(actions);
     byId("run-detail-panel").classList.remove("hidden");
     switchView("transactions");
   } catch (error) {

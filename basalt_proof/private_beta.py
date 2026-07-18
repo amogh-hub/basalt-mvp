@@ -210,7 +210,7 @@ class PrivateBetaPlatform:
         providers = self.providers.snapshot()
         deployments = self.deployments.snapshot()
         return {
-            "version": "2.5.0b1",
+            "version": "2.5.0b3",
             "root": str(self.root),
             "workspace": workspace,
             "jobs": jobs,

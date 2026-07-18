@@ -14,7 +14,7 @@ Phase 6 turns Basalt's alpha factory into a persistent private-beta product foun
 - promotion, restore, and rollback records
 - Private Beta Command Center views and APIs
 - official founder-provided Basalt wordmark integration
-- 186 automated tests and 102 critical proof-matrix tests
+- 187 automated tests and 102 critical proof-matrix tests
 
 ## Boundaries
 

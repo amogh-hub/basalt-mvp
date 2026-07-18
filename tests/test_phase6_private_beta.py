@@ -537,6 +537,49 @@ class Phase6CommandCenterTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertIn("team", data)
 
+    def test_command_center_factory_build_writes_outside_source_repository(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = make_repo(Path(td))
+            service = CommandCenterService(repo)
+            run = service.factory_plan(
+                "Build a booking platform with authentication, notifications, and a dashboard.",
+                "Venue Core",
+                "saas-starter",
+                ["venue owners", "customers"],
+                ["no production secrets", "local verification only"],
+                "local",
+            )
+            result = service.factory_build(run["run_id"])
+            target = Path(result["target_path"]).resolve()
+            self.assertEqual(result["status"], "VERIFIED")
+            self.assertNotEqual(target, repo.resolve())
+            self.assertNotIn(repo.resolve(), target.parents)
+            self.assertTrue(target.exists())
+
+    def test_command_center_unifies_factory_state_transactions(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = make_repo(Path(td))
+            service = CommandCenterService(repo)
+            run = service.factory_plan(
+                "Build a booking platform with authentication, notifications, and a dashboard.",
+                "Venue Core",
+                "saas-starter",
+                ["venue owners", "customers"],
+                ["no production secrets", "local verification only"],
+                "local",
+            )
+            result = service.factory_build(run["run_id"])
+            overview = service.overview()
+            factory_rows = [item for item in overview["transactions"]["recent"] if item.get("kind") == "factory"]
+            self.assertEqual(result["status"], "VERIFIED")
+            self.assertEqual(overview["transactions"]["total"], 1)
+            self.assertEqual(len(factory_rows), 1)
+            self.assertEqual(factory_rows[0]["status"], "COMMITTED")
+            self.assertEqual(factory_rows[0]["base_version"], 0)
+            self.assertEqual(factory_rows[0]["result_version"], 1)
+            self.assertEqual(factory_rows[0]["run_id"], run["run_id"])
+            self.assertFalse(factory_rows[0]["rollback_available"])
+
     def test_brand_asset_is_served(self):
         with tempfile.TemporaryDirectory() as td:
             repo = make_repo(Path(td))

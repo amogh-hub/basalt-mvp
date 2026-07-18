@@ -1,4 +1,19 @@
+## 2.5.0b3 — Unified Factory Transaction Ledger Hotfix
+
+- Wires committed factory state transactions into the Command Center transaction ledger.
+- Displays factory transaction type, state transition, proof, target, and isolation boundary.
+- Preserves agent patch transactions and their approval/apply/rollback actions.
+- Adds regression coverage for the real factory state `0 → 1` acceptance path.
+- Explicitly reports that factory state rollback is not exposed in Phase 6.
+
 # Changelog
+
+## 2.5.0b2 — Command Center Factory Build Hotfix
+
+- Fixed governed **Build and prove** runs failing because the Command Center selected a generated-product target inside the Basalt source repository.
+- Generated products now assemble into a persistent sibling `basalt-products/` directory with a run-specific target.
+- Added regression coverage for Command Center factory execution.
+- Factory errors now return their precise governed rejection message instead of a generic internal-error banner.
 
 ## 2.5.0b1 — Phase 6 Private Beta Full Build System
 
@@ -11,7 +26,7 @@
 - Added VERIFIED-only deployment packaging, SHA-256 integrity, approval gates, promote, restore, and rollback records.
 - Added Private Beta Command Center APIs and project/job/provider/deployment views.
 - Integrated the official Basalt wordmark and compact monochrome marks.
-- Added 52 Phase 6 tests plus one Phase 2 graph-regression test, bringing the total to 186.
+- Added 52 Phase 6 tests plus one Phase 2 graph-regression test, bringing the total to 187.
 - Updated the critical self-proof matrix to 102 tests.
 
 ## 2.4.0-alpha.1 — Phase 5 Alpha AI Software Factory
