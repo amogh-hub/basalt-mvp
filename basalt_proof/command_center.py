@@ -33,6 +33,7 @@ from .software_factory import (
     load_factory_run,
     plan_factory_run,
 )
+from .state_coordinator import StateCoordinator
 
 
 COMMAND_CENTER_API_VERSION = "v1"
@@ -141,6 +142,10 @@ class CommandCenterService:
         return self.out_dir / "knowledge-graph.sqlite3"
 
     @property
+    def factory_state_path(self) -> Path:
+        return self.out_dir / "factory-state.sqlite3"
+
+    @property
     def private_beta_root(self) -> Path:
         return self.out_dir / "private-beta"
 
@@ -166,6 +171,46 @@ class CommandCenterService:
 
     def recent_factory_runs(self) -> list[dict[str, Any]]:
         return list_factory_runs(self.repo, self.out_dir)
+
+    def factory_transactions(self) -> list[dict[str, Any]]:
+        snapshot = StateCoordinator(self.factory_state_path).snapshot()
+        factory_runs = {item.get("run_id"): item for item in self.recent_factory_runs()}
+        rows: list[dict[str, Any]] = []
+        for transaction in snapshot.get("transactions", []):
+            run_id = str(transaction.get("run_id", ""))
+            run = factory_runs.get(run_id, {})
+            rows.append(
+                {
+                    "kind": "factory",
+                    "transaction_type": "FACTORY_STATE",
+                    "run_id": run_id,
+                    "task": str(transaction.get("summary") or run.get("product_name") or "Factory state transaction"),
+                    "status": str(transaction.get("status", "UNKNOWN")),
+                    "risk": "GOVERNED",
+                    "updated_at": str(transaction.get("finished_at") or transaction.get("created_at") or ""),
+                    "created_at": str(transaction.get("created_at") or ""),
+                    "base_version": int(transaction.get("base_version", 0) or 0),
+                    "result_version": transaction.get("result_version"),
+                    "product_name": str(run.get("product_name") or ""),
+                    "target_path": str(run.get("target_path") or ""),
+                    "proof_status": str(run.get("proof_status") or ""),
+                    "proof_score": int(run.get("proof_score", 0) or 0),
+                    "rollback_available": False,
+                }
+            )
+        return rows
+
+    def governed_transactions(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for run in self.recent_runs():
+            item = dict(run)
+            item.setdefault("kind", "agent")
+            item.setdefault("transaction_type", "AGENT_PATCH")
+            item.setdefault("rollback_available", str(item.get("status")) == "VERIFIED")
+            rows.append(item)
+        rows.extend(self.factory_transactions())
+        rows.sort(key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""), reverse=True)
+        return rows
 
     def artifacts(self) -> list[dict[str, Any]]:
         allowed_names = {
@@ -262,12 +307,13 @@ class CommandCenterService:
             graph = self.ensure_graph()
             report = self.proof_report()
             runs = self.recent_runs()
+            transactions = self.governed_transactions()
             factory_runs = self.recent_factory_runs()
-            status_counts = Counter(str(item.get("status", "UNKNOWN")) for item in runs)
+            status_counts = Counter(str(item.get("status", "UNKNOWN")) for item in transactions)
             factory_status_counts = Counter(str(item.get("status", "UNKNOWN")) for item in factory_runs)
             pending = [item for item in runs if str(item.get("status")) == "AWAITING_APPROVAL"]
-            verified = [item for item in runs if str(item.get("status")) == "VERIFIED"]
-            rolled_back = [item for item in runs if str(item.get("status")) == "ROLLED_BACK"]
+            verified = [item for item in transactions if str(item.get("status")) in {"VERIFIED", "COMMITTED"}]
+            rolled_back = [item for item in transactions if str(item.get("status")) == "ROLLED_BACK"]
             project_name = str(report.get("project_name") or config.project_name or self.repo.name)
             return {
                 "api_version": COMMAND_CENTER_API_VERSION,
@@ -292,11 +338,11 @@ class CommandCenterService:
                 "graph": _graph_metrics(graph),
                 "approvals": {"pending": len(pending), "items": pending[:10]},
                 "transactions": {
-                    "total": len(runs),
+                    "total": len(transactions),
                     "verified": len(verified),
                     "rolled_back": len(rolled_back),
                     "status_counts": dict(status_counts),
-                    "recent": runs[:12],
+                    "recent": transactions[:20],
                 },
                 "factory": {
                     "total": len(factory_runs),
@@ -411,7 +457,7 @@ class CommandCenterService:
     def factory_build(self, run_id: str, sandbox: str = "temp") -> dict[str, Any]:
         run = load_factory_run(self.repo, run_id, self.out_dir)
         safe_name = re.sub(r"[^a-z0-9]+", "-", run.product_name.lower()).strip("-") or run.run_id
-        target = self.out_dir / "factory-products" / safe_name
+        target = self.repo.parent / "basalt-products" / f"{safe_name}-{run.run_id[-8:]}"
         with self._lock:
             return build_factory_run(
                 self.repo,

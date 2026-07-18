@@ -18,6 +18,7 @@ from .command_center import AgentRunError, CommandCenterService
 from .deployment_manager import DeploymentError
 from .job_queue import JobQueueError
 from .private_beta import PrivateBetaError
+from .software_factory import FactoryError
 from .workspace_registry import WorkspaceError
 
 
@@ -445,6 +446,7 @@ def create_command_center_server(
                 DeploymentError,
                 JobQueueError,
                 PrivateBetaError,
+                FactoryError,
                 WorkspaceError,
                 FileNotFoundError,
                 PermissionError,

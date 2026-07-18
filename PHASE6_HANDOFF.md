@@ -24,7 +24,7 @@ Phase 6 promotes Basalt from a bounded local alpha factory to a persistent priva
 
 ## Validation target
 
-- 186 automated tests across Phases 1–6
+- 187 automated tests across Phases 1–6
 - 102-test critical proof matrix
 - fresh Project Knowledge Graph
 - Basalt design and brand audit with zero medium/high findings
