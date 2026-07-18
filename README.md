@@ -1,159 +1,159 @@
-# Basalt v2.4 Alpha AI Software Factory
+# Basalt v2.5 Private Beta Full Build System
 
-**Version:** `2.4.0a1`
+**Version:** `2.5.0b1`
 **Core promise:** **Verified software, not vibes.**
 
-Basalt is a proof-first, prevention-first AI software factory. Phase 5 connects product intent, locked engineering truth, dependency-safe planning, governed specialist roles, model routing, staged implementation, adversarial proof, and atomic assembly into one alpha factory loop.
+Basalt is a proof-first, prevention-first AI software factory. Phase 6 turns the bounded local alpha factory into a persistent private-beta control plane with projects, team roles, durable jobs, isolated workspaces, provider integrations, broader product templates, verified deployment artifacts, and an expanded Command Center.
 
-Basalt does not treat generated code as complete because it looks plausible. A factory build is assembled into its target only after the staged product receives a `VERIFIED` proof verdict.
+Basalt still does not trust generated software because it looks plausible. Work moves forward only through explicit product truth, policy, isolated execution, proof, approvals, and auditable state transitions.
 
-## Phase 5 capabilities
+## Phase 6 capabilities
 
-### Product Brain
+### Persistent users, teams, and projects
 
-A product prompt is converted into a structured Product Blueprint containing:
+The private-beta registry stores:
 
-- product summary and target users
-- features and requirement IDs
-- user flows and acceptance criteria
-- non-functional requirements
-- explicit assumptions and risks
-- constraints, success criteria, and architecture hints
+- users and private teams
+- owner, admin, developer, reviewer, and viewer roles
+- project registration and status
+- project privacy mode and default branch
+- append-only activity history
 
-### Prevention-First Engineering
+Role checks are enforced before project, job, or deployment actions.
 
-Before implementation, Basalt produces a locked Engineering Plan with:
+### Durable job execution
 
-- contradiction detection
-- architecture decisions
-- requirement-linked test plans
-- risk controls
-- API, schema, authentication, payment, product, and design-system contract locks
+Long-running work is represented as persistent jobs rather than browser requests:
 
-A contradictory plan is blocked before build work begins.
+- `VERIFY_PROJECT`
+- `FACTORY_PLAN`
+- `FACTORY_CREATE`
+- `PACKAGE_PREVIEW`
 
-### Deterministic state coordination
+The SQLite job runtime provides idempotency keys, worker ownership, leases, heartbeats, cancellation, bounded retries, retry waiting, and lifecycle events.
 
-Factory runs use a persistent SQLite State Coordinator for:
+### Isolated private-beta workspaces
 
-- monotonic project state versions
-- compare-and-swap transaction commits
-- stale-state rejection
-- exclusive contract locks
-- transaction abort and lock release
-- auditable state snapshots
+Each job receives a bounded disposable workspace. The runtime:
 
-### Epoch Planner and Patch Aggregator
+- rejects symlinks
+- excludes Git history, virtual environments, dependencies, caches, and Basalt state
+- enforces file and byte ceilings
+- copies only allowlisted environment values
+- records a source-state hash
+- verifies that the registered repository was not changed by isolated verification
+- records network policy as denied by default
 
-Work is scheduled into five dependency-safe waves:
+The current beta uses local workspace copies and the existing temp/Docker proof sandboxes. Warm copy-on-write pools and microVMs remain later infrastructure work.
 
-1. Shared Truth
-2. Implementation
-3. Verification
-4. Hardening
-5. Release
+### Secret-safe provider integrations
 
-Related proposals that intersect files or shared contracts can be grouped into atomic batches instead of being committed independently.
+Basalt now has a persistent provider inventory and a minimal OpenAI-compatible adapter.
 
-### Specialist-agent orchestration
-
-Phase 5 models accountable roles such as:
-
-- Product Agent
-- Architecture Agent
-- UI Design Agent
-- Frontend Agent
-- Backend Agent
-- Database Agent
-- Testing Agent
-- Security Agent
-- Code Review Agent
-- Documentation Agent
-- Performance Agent
-- DevOps Agent
-
-Agents receive defined tasks, dependencies, locks, risk levels, expected artifacts, and provider-neutral model assignments. They do not own commit authority.
-
-### Heterogeneous Model Router
-
-The router selects the cheapest available model profile capable of a task while respecting privacy mode. The alpha ships with deterministic local planning and template-code-generation profiles, plus an optional OpenAI-compatible adapter configured through environment variables. High-risk generation requests a separate review family.
-
-### Proof-backed assembly
-
-The factory workflow is:
+Built-in local profiles remain available for deterministic planning and template code generation. A remote compatible provider is enabled only when these variables are deliberately configured:
 
 ```text
-Intent
-→ Product Blueprint
-→ Prevention Locks
-→ Dependency-Safe Task Graph
-→ Model Assignments
-→ Staged Specialist Execution
-→ Basalt Proof Layer
-→ VERIFIED-only Atomic Assembly
-→ State Commit and Evidence
+BASALT_OPENAI_BASE_URL
+BASALT_OPENAI_MODEL
+BASALT_OPENAI_API_KEY
 ```
 
-The target directory is not created or changed before proof succeeds. Failed or stale work is rejected and the state transaction is aborted.
+Credentials are read at execution time. Provider snapshots expose only whether credentials are configured, never their values.
 
-### Basalt Obsidian design system
+### Broader private-beta product templates
 
-The Command Center now uses the locked Basalt identity:
-
-- near-black, graphite, obsidian, and steel surfaces
-- restrained steel-blue accents
-- status colours only for meaningful state
-- no lime accent
-- no emojis or cartoon agents
-- no decorative neon or fake AI activity
-- progressive disclosure of technical evidence
-
-The design-system audit checks interface source for legacy lime, emojis, external UI assets, and token drift.
-
-## Supported alpha product templates
-
-Phase 5 deliberately supports two bounded templates:
+The factory now accepts:
 
 - `python-service`
+- `api-service`
 - `fullstack-lite`
+- `web-app`
+- `saas-starter`
 
-Both produce dependency-free Python service foundations. `fullstack-lite` also produces a responsive static web surface using the Basalt Obsidian design language. This is an alpha proof of the governed factory loop, not yet arbitrary production application generation.
+`saas-starter` adds a dependency-free multi-tenant foundation with tenant isolation, role checks, subscription gates, tests, documentation, and embedded Basalt proof evidence. These are still governed starter systems, not arbitrary production applications.
+
+### Verified deployment control plane
+
+Basalt can package a product only when its proof report is `VERIFIED` with an acceptable score. It creates an immutable `.tar.gz` artifact with a SHA-256 digest and records it in a deployment ledger.
+
+Supported control-plane environments:
+
+- preview — may promote immediately after proof
+- staging — requires explicit approval
+- production — requires explicit approval
+
+Promotion, artifact integrity checks, restore, and rollback records are implemented. Phase 6 does **not** claim live cloud-provider deployment; it establishes the private-beta release boundary that Phase 7 will connect to production infrastructure.
+
+### Official Basalt brand integration
+
+The Command Center now uses the official Basalt wordmark supplied by the founder:
+
+- soft off-white wordmark on obsidian in dark mode
+- near-black wordmark on a soft light surface
+- preserved logo geometry through a reusable mask
+- compact mark variants for app surfaces
+- no lime, emoji UI, cartoon agents, neon effects, or external UI assets
+
+The Basalt Obsidian design audit now validates both design tokens and required brand assets.
+
+### Private Beta Command Center
+
+The Command Center adds a dedicated private-beta control surface for:
+
+- persistent projects
+- durable jobs
+- configured model providers
+- deployment artifacts and status
+- factory runs and proof-backed assembly
+- existing proof, knowledge, transactions, approvals, and evidence
+
+The existing security boundary remains: localhost by default, read-only by default, per-launch action token, same-origin validation, Host-header validation, restrictive CSP, and approved artifact access.
 
 ## Quick start
 
-Install in editable mode:
+Install locally:
 
 ```bash
 python -m pip install -e .
 ```
 
-Plan a product:
+Bootstrap a private-beta workspace:
 
 ```bash
-basalt factory plan . \
-  --prompt "Build an authenticated booking platform with a dashboard and notifications." \
-  --name "Arena" \
-  --template fullstack-lite
+basalt beta bootstrap . \
+  --email founder@example.com \
+  --name "Basalt Founder" \
+  --team "Basalt Private Beta"
 ```
 
-Plan, build, verify, and assemble:
+Register a project:
 
 ```bash
-basalt factory create . \
-  --prompt "Build an authenticated booking platform with a dashboard and notifications." \
-  --name "Arena" \
-  --template fullstack-lite \
-  --privacy local \
-  --sandbox temp \
-  --target ../arena-product
+basalt beta project-add . \
+  --team-id TEAM_ID \
+  --created-by USER_ID \
+  --name "Core Product" \
+  --project-repo /path/to/repository \
+  --template saas-starter
 ```
 
-Inspect factory state:
+Submit and process durable work:
 
 ```bash
-basalt factory status .
-basalt factory models .
-basalt factory design-system .
+basalt beta job-submit . \
+  --project-id PROJECT_ID \
+  --created-by USER_ID \
+  --type VERIFY_PROJECT
+
+basalt beta job-run . JOB_ID
+basalt beta jobs .
+```
+
+Inspect providers and deployments:
+
+```bash
+basalt beta providers .
+basalt beta deployments .
 ```
 
 Launch the Command Center:
@@ -168,85 +168,110 @@ Enable governed actions deliberately:
 basalt command-center . --allow-actions
 ```
 
+Create a verified SaaS starter directly through the factory:
+
+```bash
+basalt factory create . \
+  --prompt "Build a multi-tenant operations platform with roles, subscriptions, an API, and a dashboard." \
+  --name "Obsidian Ops" \
+  --template saas-starter \
+  --privacy local \
+  --sandbox temp \
+  --target ../obsidian-ops
+```
+
 ## Existing platform capabilities retained
 
-Phase 5 builds on all earlier layers:
+Phase 6 preserves every completed lower layer:
 
-- repository verification and proof scoring
-- `VERIFIED`, `WEAK_PROOF`, and blocked outcomes
+- proof verdicts and scoring
 - temp and Docker sandbox execution
-- mutation testing and weak-test detection
-- security, secret, dependency, workflow, auth-risk, SQL-risk, and quality checks
+- mutation testing and weak-proof detection
+- security, secrets, dependency, workflow, auth, SQL, and quality checks
 - GitHub Actions proof gates and evidence artifacts
-- persistent AST-anchored Project Knowledge Graph
-- Python, JavaScript, TypeScript, TSX, and SQL parsing
-- graph freshness and impact analysis
+- AST-anchored Project Knowledge Graph
+- graph freshness, feature/test mapping, and impact analysis
 - task-specific Context Compiler
-- governed safe-fix transactions
-- Policy Kernel and role permissions
-- human approval, atomic patching, and automatic rollback
-- local Command Center UI and API
+- governed agent patch transactions
+- Policy Kernel and role capabilities
+- human approvals and automatic rollback
+- Product Brain and prevention-first engineering
+- deterministic State Coordinator
+- dependency-safe Epoch Planner and Patch Aggregator
+- provider-neutral Model Router
+- specialist-agent task orchestration
+- VERIFIED-only factory assembly
+- Basalt Obsidian Command Center
 
-## Command Center factory endpoints
+## Private Beta API
 
-Read-only factory state:
-
-```text
-GET /api/v1/factory
-GET /api/v1/factory/runs
-GET /api/v1/factory/runs/<run-id>
-```
-
-Governed actions, available only when the server is launched with `--allow-actions` and a valid per-launch token is supplied:
+Read-only state:
 
 ```text
-POST /api/v1/factory/plan
-POST /api/v1/factory/runs/<run-id>/build
+GET /api/v1/beta
+GET /api/v1/beta/projects
+GET /api/v1/beta/jobs
+GET /api/v1/beta/jobs/<job-id>
+GET /api/v1/beta/providers
+GET /api/v1/beta/deployments
+GET /api/v1/beta/deployments/<deployment-id>
 ```
 
-## Evidence
+Governed actions require `--allow-actions` and the per-launch token:
 
-Each factory run writes durable artifacts under `.basalt/factory-runs/<run-id>/`, including:
+```text
+POST /api/v1/beta/bootstrap
+POST /api/v1/beta/projects
+POST /api/v1/beta/jobs
+POST /api/v1/beta/jobs/<job-id>/run
+POST /api/v1/beta/jobs/<job-id>/cancel
+POST /api/v1/beta/jobs/<job-id>/retry
+POST /api/v1/beta/deployments/<deployment-id>/approve
+POST /api/v1/beta/deployments/<deployment-id>/promote
+POST /api/v1/beta/deployments/<deployment-id>/rollback
+```
 
-- Product Blueprint JSON and Markdown
-- Engineering Plan JSON and Markdown
-- task graph and epoch plan
-- model assignments
-- Basalt design tokens and design audit
-- factory manifest
-- specialist execution records
-- proof reports
-- transaction and state evidence
+## Evidence and storage
 
-## Security and trust boundaries
+Private-beta state is stored under `.basalt/private-beta/` by default:
 
-- Read-only Command Center by default
-- localhost binding by default
-- per-launch action token
-- same-origin and Host-header enforcement
-- restrictive Content Security Policy
-- controlled artifact vault
-- target untouched until verified
-- contract locks before build
-- stale-state fail-closed behavior
-- proof regression cannot be assembled
-- external model adapter disabled unless explicitly configured
+- workspace and RBAC database
+- durable job database and events
+- isolated workspace manifests
+- provider configuration references
+- factory and job artifacts
+- deployment ledger
+- immutable deployment packages
+- private-beta snapshots
 
-## Current maturity and non-goals
+Project and proof evidence remain under `.basalt/` and generated product targets.
 
-Basalt v2.4 is an **alpha software-factory loop**. It proves that structured intent can be converted into a governed, staged, verified product foundation.
+## Current maturity and honest boundaries
 
-It is not yet:
+Basalt v2.5 is a **private-beta full build system**, not yet the production Basalt v1 release.
 
-- arbitrary full-stack product generation
-- a cloud multi-tenant service
-- a team collaboration platform
-- a durable distributed workflow system
-- warm snapshot or microVM infrastructure
-- production deployment and monitoring automation
-- the final Basalt vision
+Implemented now:
 
-Those are intentionally reserved for Phases 6–8.
+- persistent local teams and projects
+- durable job semantics
+- isolated job workspaces
+- optional real OpenAI-compatible model calls
+- broader governed starter generation
+- verified release artifacts and approval gates
+- private-beta Command Center experience
+
+Not yet claimed:
+
+- hosted multi-tenant cloud accounts
+- production identity provider and billing
+- Redis/Temporal distributed workers
+- remote secret vault
+- warm snapshot pools or microVM isolation
+- real AWS/GCP/Azure/Vercel deployment connectors
+- production monitoring and incident response
+- enterprise compliance certification
+
+Those are Phase 7 production responsibilities and Phase 8 final-vision work.
 
 ## Roadmap
 
@@ -256,8 +281,8 @@ Phase 1 — Alpha Proof Platform                    COMPLETE
 Phase 2 — Knowledge Graph + Context Compiler      COMPLETE
 Phase 3 — Agent-Assisted Safe Fixes               COMPLETE
 Phase 4 — Command Center Web App                  COMPLETE
-Phase 5 — Alpha AI Software Factory               ACTIVE
-Phase 6 — Private Beta Full Build System          UPCOMING
+Phase 5 — Alpha AI Software Factory               COMPLETE
+Phase 6 — Private Beta Full Build System          ACTIVE
 Phase 7 — Production Basalt v1                    UPCOMING
 Phase 8 — Full Basalt Final Vision                UPCOMING
 ```

@@ -458,16 +458,20 @@ def _parse_js(path: Path, repo_path: Path) -> tuple[list[GraphSymbol], list[Grap
     symbols: list[GraphSymbol] = []
     edges: list[GraphEdge] = []
     routes: list[str] = []
+    symbol_occurrences: dict[str, int] = {}
 
     def add_symbol(name: str, kind: str, line: int, signature: str = "") -> GraphSymbol:
+        occurrence = symbol_occurrences.get(name, 0) + 1
+        symbol_occurrences[name] = occurrence
+        qualified_name = name if occurrence == 1 else f"{name}#{occurrence}"
         symbol = GraphSymbol(
             file=relative,
             name=name,
             kind=kind,
             line=line,
             signature=signature or name,
-            id=_symbol_id(relative, name),
-            qualified_name=name,
+            id=_symbol_id(relative, qualified_name),
+            qualified_name=qualified_name,
             end_line=line,
         )
         symbols.append(symbol)

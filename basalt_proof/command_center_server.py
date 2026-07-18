@@ -15,6 +15,10 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .command_center import AgentRunError, CommandCenterService
+from .deployment_manager import DeploymentError
+from .job_queue import JobQueueError
+from .private_beta import PrivateBetaError
+from .workspace_registry import WorkspaceError
 
 
 MAX_REQUEST_BYTES = 1_000_000
@@ -54,6 +58,11 @@ def _asset_text(name: str) -> str:
     return resource.read_text(encoding="utf-8")
 
 
+def _asset_bytes(*parts: str) -> bytes:
+    resource = files("basalt_proof").joinpath("webui", *parts)
+    return resource.read_bytes()
+
+
 def _json_bytes(data: Any) -> bytes:
     return json.dumps(data, indent=2, sort_keys=False).encode("utf-8")
 
@@ -80,7 +89,7 @@ def create_command_center_server(
     service = CommandCenterService(repo, out_dir)
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "BasaltCommandCenter/2.3"
+        server_version = "BasaltCommandCenter/2.5"
 
         def log_message(self, format: str, *args: object) -> None:
             return
@@ -188,10 +197,24 @@ def create_command_center_server(
                         "application/javascript; charset=utf-8",
                     )
                     return
+                if path.startswith("/assets/brand/"):
+                    name = path.rsplit("/", 1)[-1]
+                    allowed = {
+                        "basalt-wordmark-mask.png",
+                        "basalt-wordmark-dark.png",
+                        "basalt-wordmark-light.png",
+                        "basalt-mark-dark.png",
+                        "basalt-mark-light.png",
+                    }
+                    if name not in allowed:
+                        self._error(HTTPStatus.NOT_FOUND, "NOT_FOUND", "Brand asset not found.")
+                        return
+                    self._send(HTTPStatus.OK, _asset_bytes("brand", name), "image/png")
+                    return
                 if path == "/api/v1/health":
                     self._send_json(
                         HTTPStatus.OK,
-                        {"status": "ok", "service": "Basalt AI Software Factory", "api_version": "v1"},
+                        {"status": "ok", "service": "Basalt Private Beta Full Build System", "api_version": "v1"},
                     )
                     return
                 if path == "/api/v1/bootstrap":
@@ -229,11 +252,32 @@ def create_command_center_server(
                 if path == "/api/v1/factory/runs":
                     self._send_json(HTTPStatus.OK, {"items": service.factory_runs()})
                     return
+                if path == "/api/v1/beta":
+                    self._send_json(HTTPStatus.OK, service.beta_state())
+                    return
+                if path == "/api/v1/beta/projects":
+                    self._send_json(HTTPStatus.OK, {"items": service.private_beta().registry.list_projects()})
+                    return
+                if path == "/api/v1/beta/jobs":
+                    self._send_json(HTTPStatus.OK, {"items": service.private_beta().jobs.list()})
+                    return
+                if path == "/api/v1/beta/providers":
+                    self._send_json(HTTPStatus.OK, service.private_beta().providers.snapshot())
+                    return
+                if path == "/api/v1/beta/deployments":
+                    self._send_json(HTTPStatus.OK, service.private_beta().deployments.snapshot())
+                    return
                 if len(parts) == 4 and parts[:3] == ["api", "v1", "runs"]:
                     self._send_json(HTTPStatus.OK, service.run_detail(parts[3]))
                     return
                 if len(parts) == 5 and parts[:4] == ["api", "v1", "factory", "runs"]:
                     self._send_json(HTTPStatus.OK, service.factory_run_detail(parts[4]))
+                    return
+                if len(parts) == 5 and parts[:4] == ["api", "v1", "beta", "jobs"]:
+                    self._send_json(HTTPStatus.OK, service.private_beta().jobs.get(parts[4]).to_dict())
+                    return
+                if len(parts) == 5 and parts[:4] == ["api", "v1", "beta", "deployments"]:
+                    self._send_json(HTTPStatus.OK, service.private_beta().deployments.get(parts[4]).to_dict())
                     return
                 if path == "/api/v1/graph/query":
                     query = parse_qs(parsed.query)
@@ -316,6 +360,63 @@ def create_command_center_server(
                     result = service.factory_build(parts[4], str(data.get("sandbox", "temp")))
                     self._send_json(HTTPStatus.OK, result)
                     return
+                if parts == ["api", "v1", "beta", "bootstrap"]:
+                    if not self._require_action_access():
+                        return
+                    self._send_json(HTTPStatus.OK, service.beta_bootstrap(
+                        str(data.get("email", "")), str(data.get("display_name", "")), str(data.get("team_name", ""))
+                    ))
+                    return
+                if parts == ["api", "v1", "beta", "projects"]:
+                    if not self._require_action_access():
+                        return
+                    self._send_json(HTTPStatus.OK, service.beta_add_project(
+                        str(data.get("team_id", "")), str(data.get("name", "")),
+                        str(data.get("repo_path", service.repo)), str(data.get("created_by", "")),
+                        str(data.get("template", "fullstack-lite")), str(data.get("privacy_mode", "local"))
+                    ))
+                    return
+                if parts == ["api", "v1", "beta", "jobs"]:
+                    if not self._require_action_access():
+                        return
+                    payload = data.get("payload") or {}
+                    if not isinstance(payload, dict):
+                        raise ValueError("Job payload must be an object.")
+                    self._send_json(HTTPStatus.OK, service.beta_submit_job(
+                        str(data.get("project_id", "")), str(data.get("job_type", "")), payload,
+                        str(data.get("created_by", "")), str(data.get("idempotency_key", ""))
+                    ))
+                    return
+                if len(parts) == 6 and parts[:4] == ["api", "v1", "beta", "jobs"]:
+                    if not self._require_action_access():
+                        return
+                    job_id, action = parts[4], parts[5]
+                    if action == "run":
+                        result = service.beta_run_job(job_id, str(data.get("worker_id", "command-center-worker")))
+                    elif action == "cancel":
+                        result = service.beta_cancel_job(job_id, str(data.get("actor", "")), str(data.get("reason", "")))
+                    elif action == "retry":
+                        result = service.beta_retry_job(job_id, str(data.get("actor", "")))
+                    else:
+                        self._error(HTTPStatus.NOT_FOUND, "NOT_FOUND", "Unknown beta job action.")
+                        return
+                    self._send_json(HTTPStatus.OK, result)
+                    return
+                if len(parts) == 6 and parts[:4] == ["api", "v1", "beta", "deployments"]:
+                    if not self._require_action_access():
+                        return
+                    deployment_id, action = parts[4], parts[5]
+                    if action == "approve":
+                        result = service.beta_approve_deployment(deployment_id, str(data.get("actor", "")), str(data.get("reason", "")))
+                    elif action == "promote":
+                        result = service.beta_promote_deployment(deployment_id, str(data.get("actor", "")))
+                    elif action == "rollback":
+                        result = service.beta_rollback_deployment(deployment_id, str(data.get("actor", "")), str(data.get("reason", "")))
+                    else:
+                        self._error(HTTPStatus.NOT_FOUND, "NOT_FOUND", "Unknown deployment action.")
+                        return
+                    self._send_json(HTTPStatus.OK, result)
+                    return
                 if len(parts) == 5 and parts[:3] == ["api", "v1", "runs"]:
                     if not self._require_action_access():
                         return
@@ -339,7 +440,16 @@ def create_command_center_server(
                     self._send_json(HTTPStatus.OK, result)
                     return
                 self._error(HTTPStatus.NOT_FOUND, "NOT_FOUND", "Route not found.")
-            except (AgentRunError, FileNotFoundError, PermissionError, ValueError) as exc:
+            except (
+                AgentRunError,
+                DeploymentError,
+                JobQueueError,
+                PrivateBetaError,
+                WorkspaceError,
+                FileNotFoundError,
+                PermissionError,
+                ValueError,
+            ) as exc:
                 self._error(HTTPStatus.BAD_REQUEST, "REQUEST_REJECTED", str(exc))
             except Exception:
                 self._error(HTTPStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Command Center action failed.")
@@ -371,7 +481,7 @@ def serve_command_center(
     actual_host, actual_port = server.server_address[:2]
     display_host = "127.0.0.1" if actual_host in {"0.0.0.0", "::"} else actual_host
     url = f"http://{display_host}:{actual_port}"
-    print("Basalt v2.4 Alpha AI Software Factory")
+    print("Basalt v2.5 Private Beta Full Build System")
     print(f"- repository: {Path(repo).resolve()}")
     print(f"- URL: {url}")
     print(f"- actions: {'enabled' if allow_actions else 'read-only'}")

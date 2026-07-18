@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.5.0b1 — Phase 6 Private Beta Full Build System
+
+- Added persistent users, teams, memberships, projects, invitations, and activity history.
+- Added owner/admin/developer/reviewer/viewer role enforcement.
+- Added durable SQLite jobs with idempotency, worker leases, retries, cancellation, and lifecycle events.
+- Added bounded isolated job workspaces and source immutability verification.
+- Added secret-safe provider inventory and an optional OpenAI-compatible adapter.
+- Expanded factory templates with `api-service`, `web-app`, and `saas-starter`.
+- Added VERIFIED-only deployment packaging, SHA-256 integrity, approval gates, promote, restore, and rollback records.
+- Added Private Beta Command Center APIs and project/job/provider/deployment views.
+- Integrated the official Basalt wordmark and compact monochrome marks.
+- Added 52 Phase 6 tests plus one Phase 2 graph-regression test, bringing the total to 186.
+- Updated the critical self-proof matrix to 102 tests.
+
 ## 2.4.0-alpha.1 — Phase 5 Alpha AI Software Factory
 
 ### Added

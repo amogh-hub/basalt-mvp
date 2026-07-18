@@ -1,5 +1,5 @@
 project:
-  name: basalt-v2.4-alpha
+  name: basalt-v2.5-private-beta
   type: python
 commands:
   install: null
@@ -49,8 +49,17 @@ agents:
   allowed_roles: ImplementationAgent,BuilderAgent,FrontendAgent,BackendAgent,DatabaseAgent,TestingAgent,DevOpsAgent,DocumentationAgent
 factory:
   enabled: true
-  default_template: fullstack-lite
+  default_template: saas-starter
+  supported_templates: python-service,api-service,fullstack-lite,web-app,saas-starter
   privacy_mode: local
   require_verified_assembly: true
   max_parallel_tasks: 4
   design_system: basalt-obsidian
+private_beta:
+  enabled: true
+  storage: .basalt/private-beta
+  default_job_attempts: 2
+  default_workspace_network: deny
+  require_verified_deployment_artifacts: true
+  require_approval_for_staging: true
+  require_approval_for_production: true

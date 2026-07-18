@@ -359,6 +359,158 @@
       "tests": [
         "tests/test_phase5_ai_software_factory.py"
       ]
+    },
+    {
+      "id": "private-beta-workspaces-rbac",
+      "name": "Private Beta Workspaces and RBAC",
+      "description": "Persists users, teams, roles, projects, invitations, and append-only activity with capability checks.",
+      "keywords": [
+        "workspace",
+        "team",
+        "project",
+        "rbac",
+        "membership"
+      ],
+      "files": [
+        "basalt_proof/beta_models.py",
+        "basalt_proof/workspace_registry.py"
+      ],
+      "tests": [
+        "tests/test_phase6_private_beta.py"
+      ]
+    },
+    {
+      "id": "durable-private-beta-jobs",
+      "name": "Durable Private Beta Job Runtime",
+      "description": "Runs persistent verify, factory, and packaging work with leases, ownership, idempotency, retries, cancellation, and events.",
+      "keywords": [
+        "job",
+        "queue",
+        "lease",
+        "retry",
+        "worker"
+      ],
+      "files": [
+        "basalt_proof/job_queue.py",
+        "basalt_proof/private_beta.py"
+      ],
+      "tests": [
+        "tests/test_phase6_private_beta.py"
+      ]
+    },
+    {
+      "id": "private-beta-workspace-runtime",
+      "name": "Private Beta Workspace Runtime",
+      "description": "Creates bounded disposable workspaces with symlink rejection, environment allowlisting, and source immutability checks.",
+      "keywords": [
+        "workspace",
+        "isolation",
+        "sandbox",
+        "source hash",
+        "environment"
+      ],
+      "files": [
+        "basalt_proof/workspace_runtime.py"
+      ],
+      "tests": [
+        "tests/test_phase6_private_beta.py"
+      ]
+    },
+    {
+      "id": "secret-safe-provider-registry",
+      "name": "Secret-Safe Model Provider Registry",
+      "description": "Inventories local and configured OpenAI-compatible providers without persisting or exposing credentials.",
+      "keywords": [
+        "provider",
+        "model",
+        "openai compatible",
+        "secret",
+        "privacy"
+      ],
+      "files": [
+        "basalt_proof/provider_registry.py"
+      ],
+      "tests": [
+        "tests/test_phase6_private_beta.py"
+      ]
+    },
+    {
+      "id": "verified-deployment-control-plane",
+      "name": "Verified Deployment Control Plane",
+      "description": "Packages only VERIFIED products into immutable digest-checked artifacts with approvals, promotion, restore, and rollback records.",
+      "keywords": [
+        "deployment",
+        "artifact",
+        "sha256",
+        "approval",
+        "rollback"
+      ],
+      "files": [
+        "basalt_proof/deployment_manager.py",
+        "basalt_proof/private_beta.py"
+      ],
+      "tests": [
+        "tests/test_phase6_private_beta.py"
+      ]
+    },
+    {
+      "id": "private-beta-command-center",
+      "name": "Private Beta Command Center",
+      "description": "Surfaces persistent projects, durable jobs, provider status, deployments, factory runs, proof, and decisions through the secured local UI/API.",
+      "keywords": [
+        "command center",
+        "private beta",
+        "projects",
+        "jobs",
+        "deployments"
+      ],
+      "files": [
+        "basalt_proof/command_center.py",
+        "basalt_proof/command_center_server.py",
+        "basalt_proof/webui/index.html",
+        "basalt_proof/webui/app.js"
+      ],
+      "tests": [
+        "tests/test_phase6_private_beta.py"
+      ]
+    },
+    {
+      "id": "official-basalt-brand-system",
+      "name": "Official Basalt Brand System",
+      "description": "Integrates the founder-provided monochrome wordmark and compact marks into the Basalt Obsidian Command Center.",
+      "keywords": [
+        "brand",
+        "logo",
+        "wordmark",
+        "obsidian",
+        "design"
+      ],
+      "files": [
+        "basalt_proof/design_system.py",
+        "basalt_proof/webui/styles.css",
+        "basalt_proof/webui/brand/basalt-wordmark-mask.png"
+      ],
+      "tests": [
+        "tests/test_phase6_private_beta.py"
+      ]
+    },
+    {
+      "id": "expanded-private-beta-templates",
+      "name": "Expanded Private Beta Product Templates",
+      "description": "Adds API service, web app, and proof-backed SaaS starter generation with tenancy, roles, and subscription gates.",
+      "keywords": [
+        "saas",
+        "template",
+        "web app",
+        "api",
+        "tenancy"
+      ],
+      "files": [
+        "basalt_proof/software_factory.py"
+      ],
+      "tests": [
+        "tests/test_phase6_private_beta.py"
+      ]
     }
   ]
 }
