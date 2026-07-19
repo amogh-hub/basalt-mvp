@@ -459,32 +459,96 @@ async function showTransaction(item) {
 function renderApprovals(items) {
   const container = byId("approval-list");
   clear(container);
+
   if (!items.length) {
     container.className = "approval-list empty-state";
     container.textContent = "No decisions require human approval.";
     return;
   }
+
   container.className = "approval-list";
+
   items.forEach((item) => {
     const card = element("article", "approval-card");
     const top = element("div", "approval-top");
     const copy = element("div");
+    const isDeployment = item.kind === "deployment";
+
     copy.append(element("h3", "", item.task || item.run_id));
-    copy.append(element("p", "", `${item.run_id} · Risk ${item.risk || "unknown"} · ${item.role || "Agent"}`));
+
+    if (isDeployment) {
+      const environment = String(item.environment || "deployment").toUpperCase();
+      const proof = `${item.proof_status || "UNKNOWN"} ${item.proof_score || 0}/100`;
+      const checksum = item.artifact_sha256
+        ? shortHash(item.artifact_sha256)
+        : "not recorded";
+      const linkedJob = (item.metadata || {}).job_id || "not linked";
+
+      copy.append(element(
+        "p",
+        "",
+        `${item.deployment_id} · ${environment} · ${item.project_id || "Unknown project"}`
+      ));
+      copy.append(element(
+        "p",
+        "",
+        `Proof ${proof} · SHA ${checksum} · Job ${linkedJob}`
+      ));
+    } else {
+      copy.append(element(
+        "p",
+        "",
+        `${item.run_id} · Risk ${item.risk || "unknown"} · ${item.role || "Agent"}`
+      ));
+    }
+
     top.append(copy);
     top.append(element("span", `status-mini ${item.status}`, item.status));
     card.append(top);
+
     const actions = element("div", "approval-actions");
-    const approve = element("button", "button primary", "Approve");
-    approve.type = "button";
-    approve.disabled = !state.bootstrap.actions_enabled;
-    approve.addEventListener("click", () => openActionDialog("approve", item.run_id));
-    const reject = element("button", "button secondary", "Reject");
-    reject.type = "button";
-    reject.disabled = !state.bootstrap.actions_enabled;
-    reject.addEventListener("click", () => openActionDialog("reject", item.run_id));
-    actions.append(approve, reject);
-    card.append(actions);
+
+    if (isDeployment) {
+      if (item.status === "AWAITING_APPROVAL") {
+        const approve = element("button", "button primary", "Approve deployment");
+        approve.type = "button";
+        approve.disabled = !state.bootstrap.actions_enabled;
+        approve.addEventListener(
+          "click",
+          () => openActionDialog("deployment-approve", item.deployment_id)
+        );
+        actions.append(approve);
+      } else if (item.status === "APPROVED") {
+        const promote = element("button", "button primary", "Promote deployment");
+        promote.type = "button";
+        promote.disabled = !state.bootstrap.actions_enabled;
+        promote.addEventListener(
+          "click",
+          () => openActionDialog("deployment-promote", item.deployment_id)
+        );
+        actions.append(promote);
+      }
+    } else {
+      const approve = element("button", "button primary", "Approve");
+      approve.type = "button";
+      approve.disabled = !state.bootstrap.actions_enabled;
+      approve.addEventListener(
+        "click",
+        () => openActionDialog("approve", item.run_id)
+      );
+
+      const reject = element("button", "button secondary", "Reject");
+      reject.type = "button";
+      reject.disabled = !state.bootstrap.actions_enabled;
+      reject.addEventListener(
+        "click",
+        () => openActionDialog("reject", item.run_id)
+      );
+
+      actions.append(approve, reject);
+    }
+
+    if (actions.childElementCount) card.append(actions);
     container.append(card);
   });
 }
@@ -622,15 +686,60 @@ function renderContext(result) {
   container.append(grid);
 }
 
-function openActionDialog(action, runId = "") {
+function openActionDialog(action, targetId = "") {
   const dialog = byId("action-dialog");
-  text("dialog-title", action === "approve" ? "Approve patch" : action === "reject" ? "Reject patch" : action === "rollback" ? "Rollback transaction" : action === "apply" ? "Apply approved patch" : "Run verification");
-  text("dialog-copy", action === "verify" ? "Basalt will run the complete configured proof process." : `This action will be recorded against ${runId}.`);
-  byId("dialog-run-id").value = runId;
+  const titles = {
+    approve: "Approve patch",
+    reject: "Reject patch",
+    rollback: "Rollback transaction",
+    apply: "Apply approved patch",
+    verify: "Run verification",
+    "deployment-approve": "Approve deployment",
+    "deployment-promote": "Promote deployment",
+  };
+
+  text("dialog-title", titles[action] || "Confirm action");
+
+  if (action === "verify") {
+    text(
+      "dialog-copy",
+      "Basalt will run the complete configured proof process."
+    );
+  } else if (action === "deployment-approve") {
+    text(
+      "dialog-copy",
+      `Approve ${targetId} after reviewing its proof, checksum, and environment. Approval does not promote it automatically.`
+    );
+  } else if (action === "deployment-promote") {
+    text(
+      "dialog-copy",
+      `Promote approved deployment ${targetId}. This action is recorded in the deployment ledger.`
+    );
+  } else {
+    text(
+      "dialog-copy",
+      `This action will be recorded against ${targetId}.`
+    );
+  }
+
+  byId("dialog-run-id").value = targetId;
   byId("dialog-action").value = action;
-  byId("dialog-actor-label").classList.toggle("hidden", ["verify", "apply"].includes(action));
-  byId("dialog-reason-label").classList.toggle("hidden", ["verify", "apply"].includes(action));
-  byId("dialog-token-label").classList.toggle("hidden", action !== "apply");
+
+  byId("dialog-actor-label").classList.toggle(
+    "hidden",
+    ["verify", "apply"].includes(action)
+  );
+
+  byId("dialog-reason-label").classList.toggle(
+    "hidden",
+    ["verify", "apply", "deployment-promote"].includes(action)
+  );
+
+  byId("dialog-token-label").classList.toggle(
+    "hidden",
+    action !== "apply"
+  );
+
   byId("dialog-actor").value = "";
   byId("dialog-reason").value = "";
   byId("dialog-approval-token").value = "";
@@ -639,27 +748,52 @@ function openActionDialog(action, runId = "") {
 
 async function submitAction(event) {
   event.preventDefault();
+
   const action = byId("dialog-action").value;
-  const runId = byId("dialog-run-id").value;
+  const targetId = byId("dialog-run-id").value;
   const actor = byId("dialog-actor").value.trim();
   const reason = byId("dialog-reason").value.trim();
   const approvalToken = byId("dialog-approval-token").value.trim();
+
   let path = "/api/v1/verify";
   let body = { sandbox: "auto" };
-  if (action !== "verify") {
-    path = `/api/v1/runs/${encodeURIComponent(runId)}/${action}`;
-    body = action === "apply" ? { approval_token: approvalToken, sandbox: "auto" } : { actor, reason };
+
+  if (action.startsWith("deployment-")) {
+    const deploymentAction = action.replace("deployment-", "");
+    path = `/api/v1/beta/deployments/${encodeURIComponent(targetId)}/${deploymentAction}`;
+    body = deploymentAction === "approve"
+      ? { actor, reason }
+      : { actor };
+  } else if (action !== "verify") {
+    path = `/api/v1/runs/${encodeURIComponent(targetId)}/${action}`;
+    body = action === "apply"
+      ? { approval_token: approvalToken, sandbox: "auto" }
+      : { actor, reason };
   }
+
   try {
     byId("dialog-submit").disabled = true;
-    const result = await api(path, { method: "POST", body: JSON.stringify(body), action: true });
+
+    const result = await api(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+      action: true,
+    });
+
     byId("action-dialog").close();
+
     if (result.approval_token) {
-      await navigator.clipboard?.writeText(result.approval_token).catch(() => undefined);
-      banner("Approved. The one-time apply token was copied to your clipboard.");
+      await navigator.clipboard
+        ?.writeText(result.approval_token)
+        .catch(() => undefined);
+
+      banner(
+        "Approved. The one-time apply token was copied to your clipboard."
+      );
     } else {
-      banner(`${action} completed successfully.`);
+      banner(`${action.replace("deployment-", "deployment ")} completed successfully.`);
     }
+
     await loadAll();
   } catch (error) {
     banner(error.message, "bad");

@@ -463,6 +463,33 @@ class PrivateBetaPlatformTests(unittest.TestCase):
             self.assertNotIn(source, target.parents)
             self.assertEqual(result["result"]["proof_status"], "VERIFIED")
 
+    def test_package_preview_defaults_to_registered_project_and_factory_proof(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            platform, bootstrap, project = self._platform_project(root)
+            source = Path(project["repo_path"]).resolve()
+
+            proof_dir = source / ".basalt" / "factory-proof"
+            proof_dir.mkdir(parents=True, exist_ok=True)
+            write_verified_proof(proof_dir)
+
+            job = platform.submit_job(
+                project["project_id"],
+                "PACKAGE_PREVIEW",
+                {},
+                bootstrap["user"]["user_id"],
+            )
+            result = platform.run_job(job["job_id"])
+
+            self.assertEqual(result["status"], "SUCCEEDED")
+            self.assertEqual(result["result"]["status"], "PROMOTED")
+            self.assertEqual(result["result"]["proof_status"], "VERIFIED")
+            self.assertEqual(result["result"]["proof_score"], 98)
+            self.assertEqual(
+                Path(result["result"]["source_path"]).resolve(),
+                source,
+            )
+
     def test_snapshot_declares_beta_boundaries(self):
         with tempfile.TemporaryDirectory() as td:
             platform = PrivateBetaPlatform(Path(td) / "beta")
@@ -536,6 +563,114 @@ class Phase6CommandCenterTests(unittest.TestCase):
                 }, token="phase6-token")
                 self.assertEqual(status, 200)
                 self.assertIn("team", data)
+
+    def test_approval_center_includes_pending_deployment_decisions(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            repo = make_repo(root, "control")
+            product = make_repo(root, "product")
+            service = CommandCenterService(repo)
+            platform = service.private_beta()
+
+            bootstrap = platform.bootstrap(
+                "owner@example.com",
+                "Owner",
+                "Basalt Team",
+            )
+            project = platform.add_project(
+                bootstrap["team"]["team_id"],
+                "Product",
+                product,
+                bootstrap["user"]["user_id"],
+            )
+
+            deployment = platform.deployments.package_verified_product(
+                project["project_id"],
+                product,
+                write_verified_proof(root),
+                "staging",
+                bootstrap["user"]["user_id"],
+            )
+
+            overview = service.overview()
+            self.assertEqual(overview["approvals"]["pending"], 1)
+
+            item = overview["approvals"]["items"][0]
+            self.assertEqual(item["kind"], "deployment")
+            self.assertEqual(item["deployment_id"], deployment.deployment_id)
+            self.assertEqual(item["action"], "approve")
+            self.assertEqual(item["status"], "AWAITING_APPROVAL")
+
+            platform.deployments.approve(
+                deployment.deployment_id,
+                "reviewer",
+                "Proof and checksum reviewed.",
+            )
+
+            approved_overview = service.overview()
+            self.assertEqual(approved_overview["approvals"]["pending"], 1)
+            self.assertEqual(
+                approved_overview["approvals"]["items"][0]["action"],
+                "promote",
+            )
+            self.assertEqual(
+                approved_overview["approvals"]["items"][0]["status"],
+                "APPROVED",
+            )
+
+    def test_command_center_can_approve_and_promote_deployment(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            repo = make_repo(root, "control")
+            product = make_repo(root, "product")
+            service = CommandCenterService(repo)
+            platform = service.private_beta()
+
+            bootstrap = platform.bootstrap(
+                "owner@example.com",
+                "Owner",
+                "Basalt Team",
+            )
+            project = platform.add_project(
+                bootstrap["team"]["team_id"],
+                "Product",
+                product,
+                bootstrap["user"]["user_id"],
+            )
+
+            deployment = platform.deployments.package_verified_product(
+                project["project_id"],
+                product,
+                write_verified_proof(root),
+                "staging",
+                bootstrap["user"]["user_id"],
+            )
+
+            with running_command_center(repo, allow_actions=True) as server:
+                status, data = request(
+                    server,
+                    "POST",
+                    f"/api/v1/beta/deployments/{deployment.deployment_id}/approve",
+                    {
+                        "actor": "Release Reviewer",
+                        "reason": "Proof and artifact integrity reviewed.",
+                    },
+                    token="phase6-token",
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(data["status"], "APPROVED")
+                self.assertEqual(data["approved_by"], "Release Reviewer")
+
+                status, data = request(
+                    server,
+                    "POST",
+                    f"/api/v1/beta/deployments/{deployment.deployment_id}/promote",
+                    {"actor": "Release Reviewer"},
+                    token="phase6-token",
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(data["status"], "PROMOTED")
+                self.assertTrue(data["promoted_at"])
 
     def test_command_center_factory_build_writes_outside_source_repository(self):
         with tempfile.TemporaryDirectory() as td:

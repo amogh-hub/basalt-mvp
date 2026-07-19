@@ -311,7 +311,39 @@ class CommandCenterService:
             factory_runs = self.recent_factory_runs()
             status_counts = Counter(str(item.get("status", "UNKNOWN")) for item in transactions)
             factory_status_counts = Counter(str(item.get("status", "UNKNOWN")) for item in factory_runs)
-            pending = [item for item in runs if str(item.get("status")) == "AWAITING_APPROVAL"]
+            beta_snapshot = self.private_beta().snapshot()
+            agent_pending = [
+                {**item, "kind": "agent", "action": "approve"}
+                for item in runs
+                if str(item.get("status")) == "AWAITING_APPROVAL"
+            ]
+
+            deployment_pending = []
+            for item in beta_snapshot.get("deployments", {}).get("deployments", []):
+                deployment_status = str(item.get("status", "UNKNOWN"))
+                if deployment_status not in {"AWAITING_APPROVAL", "APPROVED"}:
+                    continue
+
+                environment = str(item.get("environment", "deployment")).lower()
+                deployment_pending.append({
+                    **item,
+                    "kind": "deployment",
+                    "run_id": str(item.get("deployment_id", "")),
+                    "task": (
+                        f"Approve {environment} deployment"
+                        if deployment_status == "AWAITING_APPROVAL"
+                        else f"Promote {environment} deployment"
+                    ),
+                    "risk": "HIGH" if environment == "production" else "MEDIUM",
+                    "role": "Release control",
+                    "action": (
+                        "approve"
+                        if deployment_status == "AWAITING_APPROVAL"
+                        else "promote"
+                    ),
+                })
+
+            pending = agent_pending + deployment_pending
             verified = [item for item in transactions if str(item.get("status")) in {"VERIFIED", "COMMITTED"}]
             rolled_back = [item for item in transactions if str(item.get("status")) == "ROLLED_BACK"]
             project_name = str(report.get("project_name") or config.project_name or self.repo.name)
@@ -353,7 +385,7 @@ class CommandCenterService:
                     "recent": factory_runs[:12],
                     "supported_templates": ["python-service", "api-service", "fullstack-lite", "web-app", "saas-starter"],
                 },
-                "private_beta": self.private_beta().snapshot(),
+                "private_beta": beta_snapshot,
                 "artifacts": {"count": len(self.artifacts()), "items": self.artifacts()},
                 "roadmap": [
                     {"phase": 0, "name": "Vision + Grant/Demo MVP", "status": "COMPLETE"},
