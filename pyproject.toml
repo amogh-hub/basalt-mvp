@@ -1,6 +1,6 @@
 [project]
 name = "basalt-mvp"
-version = "2.5.0b3"
+version = "2.5.0b4"
 description = "Basalt v2.5 Private Beta Full Build System: persistent workspaces, teams, RBAC, durable jobs, provider integrations, isolated builds, verified deployment artifacts, and the Basalt Command Center."
 readme = "README.md"
 requires-python = ">=3.10"

@@ -151,8 +151,20 @@ class PrivateBetaPlatform:
         }
 
     def _handle_package_preview(self, job: BetaJob, project) -> dict[str, Any]:
-        source = Path(str(job.payload.get("source_path", ""))).expanduser().resolve()
-        proof_report = Path(str(job.payload.get("proof_report", source / ".basalt" / "factory-proof" / "proof-report.json")))
+        source_value = str(job.payload.get("source_path", "")).strip()
+        source = (
+            Path(source_value).expanduser().resolve()
+            if source_value
+            else Path(project.repo_path).expanduser().resolve()
+        )
+
+        proof_value = str(job.payload.get("proof_report", "")).strip()
+        proof_report = (
+            Path(proof_value).expanduser().resolve()
+            if proof_value
+            else source / ".basalt" / "factory-proof" / "proof-report.json"
+        )
+
         record = self.deployments.package_verified_product(
             project.project_id,
             source,
@@ -210,7 +222,7 @@ class PrivateBetaPlatform:
         providers = self.providers.snapshot()
         deployments = self.deployments.snapshot()
         return {
-            "version": "2.5.0b3",
+            "version": "2.5.0b4",
             "root": str(self.root),
             "workspace": workspace,
             "jobs": jobs,

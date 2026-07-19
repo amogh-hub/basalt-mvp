@@ -388,7 +388,7 @@ class ProofReport:
     evidence_dir: str | None = None
     dashboard_path: str | None = None
     patch_plan_path: str | None = None
-    basalt_version: str = "2.5.0b3"
+    basalt_version: str = "2.5.0b4"
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

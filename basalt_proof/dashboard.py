@@ -187,7 +187,7 @@ ul {{ line-height:1.9; }}
   </section>
   <section class="section"><h2>Generated Artifacts</h2><ul>{artifacts}</ul><p class="mut">Attach these artifacts to pull requests as proof evidence.</p></section>
   <section class="section"><h2>Raw JSON Evidence</h2><pre>{_esc(data)}</pre></section>
-  <div class="footer">Basalt v2.5.0-beta.3 — Private Beta Full Build System. Verified software, not vibes.</div>
+  <div class="footer">Basalt v2.5.0-beta.4 — Private Beta Full Build System. Verified software, not vibes.</div>
 </main>
 </body>
 </html>"""
