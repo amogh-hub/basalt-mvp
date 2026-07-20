@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Basalt Private Beta</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#overview" aria-label="Basalt Private Beta home">
+        <span class="brand-wordmark" aria-hidden="true"></span>
+        <small>PRIVATE BETA</small>
+      </a>
+      <nav id="main-nav">
+        <a class="nav-item active" href="#overview" data-section="overview"><span>01</span>Overview</a>
+        <a class="nav-item" href="#factory" data-section="factory"><span>02</span>Factory</a>
+        <a class="nav-item" href="#plan" data-section="plan"><span>03</span>Plan</a>
+        <a class="nav-item" href="#agents" data-section="agents"><span>04</span>Agents</a>
+        <a class="nav-item" href="#proof" data-section="proof"><span>05</span>Proof</a>
+        <a class="nav-item" href="#graph" data-section="graph"><span>06</span>Knowledge</a>
+        <a class="nav-item" href="#transactions" data-section="transactions"><span>07</span>Transactions</a>
+        <a class="nav-item" href="#approvals" data-section="approvals"><span>08</span>Approvals</a>
+        <a class="nav-item" href="#beta" data-section="beta"><span>09</span>Private Beta</a>
+        <a class="nav-item" href="#evidence" data-section="evidence"><span>10</span>Evidence</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="mode-indicator"><span id="mode-dot"></span><span id="mode-label">Read-only</span></div>
+        <p>Verified software,<br>not vibes.</p>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">LOCAL REPOSITORY TRUTH</p>
+          <h1 id="project-name">Loading repository…</h1>
+          <p id="project-path" class="project-path"></p>
+        </div>
+        <div class="topbar-actions">
+          <button id="refresh-button" class="button secondary" type="button">Refresh truth</button>
+          <a class="button secondary" href="/workspace">Build Workspace</a><button id="verify-button" class="button primary" type="button">Run verification</button>
+        </div>
+      </header>
+
+      <div id="banner" class="banner hidden" role="status"></div>
+
+      <section id="overview" class="view active" aria-labelledby="overview-title">
+        <div class="hero-panel">
+          <div>
+            <p class="eyebrow">CURRENT TRUTH</p>
+            <h2 id="overview-title">Repository trust at a glance</h2>
+            <p id="intent-copy" class="hero-copy"></p>
+            <div class="truth-line">
+              <span id="verdict-badge" class="status-badge neutral">NOT RUN</span>
+              <span id="risk-badge" class="risk-badge">Risk unknown</span>
+              <span id="freshness-badge" class="freshness-badge">Graph checking…</span>
+            </div>
+          </div>
+          <div class="score-orbit" aria-label="Proof score">
+            <div id="score-ring" class="score-ring">
+              <div><strong id="proof-score">0</strong><span>/100</span></div>
+            </div>
+            <p>Proof strength</p>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card"><p>Checks passed</p><strong id="checks-metric">0/0</strong><span id="checks-sub">No proof report</span></article>
+          <article class="metric-card"><p>Mutations killed</p><strong id="mutation-metric">0</strong><span id="mutation-sub">No mutation evidence</span></article>
+          <article class="metric-card"><p>Knowledge edges</p><strong id="edges-metric">0</strong><span id="symbols-sub">0 symbols</span></article>
+          <article class="metric-card"><p>Pending decisions</p><strong id="approvals-metric">0</strong><span>Human approvals</span></article>
+        </div>
+
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h3>Roadmap state</h3></div><span class="panel-chip">Phase 6</span></div>
+            <div id="roadmap-list" class="roadmap-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">ACTIVITY</p><h3>Recent state transactions</h3></div><button class="text-button" data-jump="transactions" type="button">View all</button></div>
+            <div id="recent-runs" class="activity-list empty-state">No agent transactions yet.</div>
+          </article>
+        </div>
+      </section>
+
+
+      <section id="factory" class="view" aria-labelledby="factory-title">
+        <div class="section-heading"><div><p class="eyebrow">PRODUCT BRAIN</p><h2 id="factory-title">Create a proof-backed product</h2><p class="muted">Intent becomes locked requirements, dependency-safe epochs, governed agent work, and verified assembly.</p></div><span class="panel-chip">Alpha factory</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Factory runs</p><strong id="factory-total">0</strong></article>
+          <article class="metric-card"><p>Verified products</p><strong id="factory-verified">0</strong></article>
+          <article class="metric-card"><p>Blocked plans</p><strong id="factory-blocked">0</strong></article>
+          <article class="metric-card"><p>Rolled back</p><strong id="factory-rolled-back">0</strong></article>
+        </div>
+        <div class="two-column factory-layout">
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">INTENT INTAKE</p><h3>Define the product</h3></div></div>
+            <form id="factory-plan-form" class="tool-form">
+              <label>Product name<input id="factory-name" required maxlength="80" placeholder="Venue Core"></label>
+              <label>Product intent<textarea id="factory-prompt" required rows="6" placeholder="Build a booking platform with authentication, owner dashboards, notifications, and an API."></textarea></label>
+              <label>Template<select id="factory-template"><option value="saas-starter">SaaS starter</option><option value="web-app">Web app</option><option value="fullstack-lite">Full-stack lite</option><option value="api-service">API service</option><option value="python-service">Python service</option></select></label>
+              <label>Target users, comma separated<input id="factory-users" placeholder="Venue owners, customers"></label>
+              <label>Constraints, one per line<textarea id="factory-constraints" rows="3" placeholder="No production secrets
+Local verification only"></textarea></label>
+              <label>Privacy mode<select id="factory-privacy"><option value="local">Local</option><option value="private">Private</option><option value="standard">Standard</option></select></label>
+              <button class="button primary" type="submit">Create governed plan</button>
+            </form>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">FACTORY LEDGER</p><h3>Recent product runs</h3></div><span id="factory-run-count" class="panel-chip">0 runs</span></div>
+            <div class="table-wrap"><table><thead><tr><th>Product</th><th>Status</th><th>Proof</th><th>Updated</th><th></th></tr></thead><tbody id="factory-runs-table"></tbody></table></div>
+          </article>
+        </div>
+        <article id="factory-detail-panel" class="panel hidden">
+          <div class="panel-heading"><div><p class="eyebrow">FACTORY RUN</p><h3 id="factory-detail-title">Run detail</h3></div><button id="close-factory-detail" class="text-button" type="button">Close</button></div>
+          <div id="factory-detail" class="detail-grid"></div>
+          <div id="factory-detail-actions" class="dialog-actions"></div>
+        </article>
+      </section>
+
+      <section id="plan" class="view" aria-labelledby="plan-title">
+        <div class="section-heading"><div><p class="eyebrow">PREVENTION-FIRST ENGINEERING</p><h2 id="plan-title">Dependency-safe execution plan</h2></div><span id="factory-state-version" class="mono-chip">state 0</span></div>
+        <div id="epoch-grid" class="epoch-grid"></div>
+        <article class="panel"><div class="panel-heading"><div><p class="eyebrow">TASK GRAPH</p><h3>Specialist assignments</h3></div></div><div class="table-wrap"><table><thead><tr><th>Task</th><th>Epoch</th><th>Agent</th><th>Risk</th><th>Status</th></tr></thead><tbody id="factory-task-table"></tbody></table></div></article>
+      </section>
+
+      <section id="agents" class="view" aria-labelledby="agents-title">
+        <div class="section-heading"><div><p class="eyebrow">GOVERNED ORCHESTRATION</p><h2 id="agents-title">Specialist agents and model routing</h2><p class="muted">Agents operate within capability scopes. Models are routed by task, privacy, cost, and review diversity.</p></div></div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">MODEL INVENTORY</p><h3>Available routing profiles</h3></div></div><div id="model-inventory" class="stack-list empty-state">No model profiles loaded.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">AGENT EXECUTION</p><h3>Latest accountable work</h3></div></div><div id="agent-execution-list" class="stack-list empty-state">Select a factory run to inspect agent work.</div></article>
+        </div>
+      </section>
+
+      <section id="proof" class="view" aria-labelledby="proof-title">
+        <div class="section-heading"><div><p class="eyebrow">ADVERSARIAL PROOF</p><h2 id="proof-title">What is actually proven</h2></div><span id="proof-sandbox" class="panel-chip">Sandbox unknown</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Passed</p><strong id="proof-passed">0</strong></article>
+          <article class="metric-card"><p>Failed</p><strong id="proof-failed">0</strong></article>
+          <article class="metric-card"><p>Survived mutations</p><strong id="proof-survived">0</strong></article>
+          <article class="metric-card"><p>High findings</p><strong id="proof-high">0</strong></article>
+        </div>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">CHECKS</p><h3>Proof execution</h3></div><span id="proof-finished" class="muted"></span></div>
+          <div class="table-wrap"><table><thead><tr><th>Check</th><th>Status</th><th>Sandbox</th><th>Duration</th><th>Meaning</th></tr></thead><tbody id="checks-table"></tbody></table></div>
+        </article>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">FINDINGS</p><h3>Risk evidence</h3></div></div><div id="findings-list" class="stack-list empty-state">No findings loaded.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">MUTATIONS</p><h3>Test strength</h3></div></div><div id="mutations-list" class="stack-list empty-state">No mutations loaded.</div></article>
+        </div>
+      </section>
+
+      <section id="graph" class="view" aria-labelledby="graph-title">
+        <div class="section-heading"><div><p class="eyebrow">AST-ANCHORED TRUTH</p><h2 id="graph-title">Repository knowledge</h2></div><span id="graph-state" class="mono-chip">state unknown</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Files</p><strong id="graph-files">0</strong></article>
+          <article class="metric-card"><p>Symbols</p><strong id="graph-symbols">0</strong></article>
+          <article class="metric-card"><p>Features</p><strong id="graph-features">0</strong></article>
+          <article class="metric-card"><p>Test mappings</p><strong id="graph-tests">0</strong></article>
+        </div>
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">IMPACT EXPLORER</p><h3>What changes if this moves?</h3></div></div>
+            <form id="impact-form" class="tool-form">
+              <label>File, symbol, route or feature<input id="impact-target" required placeholder="basalt_proof/agent_runtime.py"></label>
+              <label>Depth<input id="impact-depth" type="number" min="0" max="8" value="3"></label>
+              <button class="button primary" type="submit">Analyze impact</button>
+            </form>
+            <div id="impact-result" class="result-box empty-state">Run an impact analysis to see downstream risk.</div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">CONTEXT COMPILER</p><h3>Build the right context</h3></div></div>
+            <form id="context-form" class="tool-form">
+              <label>Task<textarea id="context-task" required rows="3" placeholder="Review approval token handling"></textarea></label>
+              <label>Agent role<select id="context-role"><option>CodeReviewAgent</option><option>TestingAgent</option><option>SecurityAgent</option><option>ImplementationAgent</option></select></label>
+              <label>Targets, comma separated<input id="context-targets" placeholder="basalt_proof/agent_runtime.py"></label>
+              <label>Token budget<input id="context-budget" type="number" min="500" max="100000" value="4000"></label>
+              <button class="button primary" type="submit">Compile context</button>
+            </form>
+            <div id="context-result" class="result-box empty-state">Compile a focused, role-aware context pack.</div>
+          </article>
+        </div>
+        <article class="panel"><div class="panel-heading"><div><p class="eyebrow">LANGUAGES</p><h3>Indexed source distribution</h3></div></div><div id="language-bars" class="bar-list"></div></article>
+      </section>
+
+      <section id="transactions" class="view" aria-labelledby="transactions-title">
+        <div class="section-heading"><div><p class="eyebrow">GOVERNED CHANGES</p><h2 id="transactions-title">State transaction ledger</h2></div><span id="transaction-count" class="panel-chip">0 total</span></div>
+        <article class="panel"><div class="table-wrap"><table><thead><tr><th>Type</th><th>Run</th><th>Task</th><th>Status</th><th>Risk</th><th>Updated</th><th></th></tr></thead><tbody id="runs-table"></tbody></table></div></article>
+        <article id="run-detail-panel" class="panel hidden"><div class="panel-heading"><div><p class="eyebrow">TRANSACTION DETAIL</p><h3 id="run-detail-title">Agent run</h3></div><button id="close-run-detail" class="text-button" type="button">Close</button></div><div id="run-detail" class="detail-grid"></div></article>
+      </section>
+
+      <section id="approvals" class="view" aria-labelledby="approvals-title">
+        <div class="section-heading"><div><p class="eyebrow">HUMAN JUDGMENT</p><h2 id="approvals-title">Approval center</h2></div><span id="approval-count" class="panel-chip">0 pending</span></div>
+        <div id="approval-list" class="approval-list empty-state">No decisions require human approval.</div>
+      </section>
+
+      <section id="beta" class="view" aria-labelledby="beta-title">
+        <div class="section-heading"><div><p class="eyebrow">PRIVATE BETA CONTROL PLANE</p><h2 id="beta-title">Projects, jobs, providers, and deployments</h2><p class="muted">Persistent teams and projects feed durable isolated jobs. Verified artifacts move through explicit deployment gates.</p></div><span class="panel-chip">Phase 6</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Projects</p><strong id="beta-project-count">0</strong></article>
+          <article class="metric-card"><p>Queued jobs</p><strong id="beta-job-count">0</strong></article>
+          <article class="metric-card"><p>Configured providers</p><strong id="beta-provider-count">0</strong></article>
+          <article class="metric-card"><p>Deployments</p><strong id="beta-deployment-count">0</strong></article>
+        </div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">WORKSPACE</p><h3>Persistent projects</h3></div></div><div id="beta-projects" class="stack-list empty-state">No private-beta projects registered.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">DURABLE EXECUTION</p><h3>Job queue</h3></div></div><div id="beta-jobs" class="stack-list empty-state">No private-beta jobs submitted.</div></article>
+        </div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">MODEL PROVIDERS</p><h3>Secret-safe configuration</h3></div></div><div id="beta-providers" class="stack-list empty-state">No provider profiles loaded.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RELEASE CONTROL</p><h3>Deployment ledger</h3></div></div><div id="beta-deployments" class="stack-list empty-state">No deployment artifacts packaged.</div></article>
+        </div>
+      </section>
+
+      <section id="evidence" class="view" aria-labelledby="evidence-title">
+        <div class="section-heading"><div><p class="eyebrow">AUDITABLE OUTPUT</p><h2 id="evidence-title">Evidence vault</h2></div><span id="artifact-count" class="panel-chip">0 artifacts</span></div>
+        <div class="two-column evidence-layout">
+          <article class="panel"><div id="artifact-list" class="artifact-list empty-state">No artifacts generated yet.</div></article>
+          <article class="panel artifact-preview"><div class="panel-heading"><div><p class="eyebrow">PREVIEW</p><h3 id="artifact-preview-title">Select an artifact</h3></div></div><pre id="artifact-preview">Evidence content will appear here.</pre></article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="action-dialog">
+    <form method="dialog" class="dialog-card" id="action-form">
+      <div class="dialog-heading"><div><p class="eyebrow">GOVERNED ACTION</p><h2 id="dialog-title">Confirm action</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+      <p id="dialog-copy" class="muted"></p>
+      <input id="dialog-run-id" type="hidden">
+      <input id="dialog-action" type="hidden">
+      <label id="dialog-actor-label">Your name<input id="dialog-actor" autocomplete="name"></label>
+      <label id="dialog-reason-label">Reason<textarea id="dialog-reason" rows="3"></textarea></label>
+      <label id="dialog-token-label" class="hidden">One-time approval token<input id="dialog-approval-token" autocomplete="off"></label>
+      <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button id="dialog-submit" class="button primary" value="default">Continue</button></div>
+    </form>
+  </dialog>
+
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,647 @@
+name: Basalt Proof Gate
+
+on:
+  push:
+    branches:
+      - phase-6-private-beta
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: basalt-proof-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Run complete test suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Compile source
+        run: python -m compileall basalt_proof tests
+
+  knowledge-platform:
+    name: Knowledge Graph and Context Compiler
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    timeout-minutes: 15
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Build persistent project graph
+        run: basalt graph build . --force
+
+      - name: Verify graph freshness
+        run: basalt graph status .
+
+      - name: Run graph query smoke test
+        run: basalt graph query . "agent runtime"
+
+      - name: Run impact-analysis smoke test
+        run: basalt impact . basalt_proof/agent_runtime.py --depth 2
+
+      - name: Compile task-specific context
+        run: |
+          basalt context . \
+            --task "Review governed agent patch application" \
+            --role CodeReviewAgent \
+            --target basalt_proof/agent_runtime.py \
+            --budget 4000
+
+      - name: Upload knowledge artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-knowledge-${{ github.run_number }}-${{ github.run_attempt }}
+          path: .basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  safe-fix-platform:
+    name: Governed Agent Safe-Fix Transaction
+    runs-on: ubuntu-latest
+    needs: knowledge-platform
+    timeout-minutes: 15
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Exercise governed patch lifecycle
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from basalt_proof.agent_runtime import apply_agent_run, approve_agent_run, plan_agent_fix
+          from basalt_proof.models import AgentRunStatus
+
+          repo = Path("phase3-ci-fixture")
+          (repo / "tests").mkdir(parents=True)
+          (repo / "app.py").write_text(
+              "def add(a: int, b: int) -> int:\n    return a + b\n",
+              encoding="utf-8",
+          )
+          (repo / "tests" / "test_app.py").write_text(
+              "import unittest\n"
+              "from app import add\n\n"
+              "class AppTests(unittest.TestCase):\n"
+              "    def test_add(self):\n"
+              "        self.assertEqual(add(2, 3), 5)\n",
+              encoding="utf-8",
+          )
+          (repo / "basalt.yaml").write_text(
+              "project:\n  name: phase3-ci\n  type: python\n"
+              "commands:\n  lint: python -m compileall app.py tests\n"
+              "  test: python -m unittest discover -s tests -v\n"
+              "proof:\n  require_lint: true\n  require_tests: true\n  mutation_sample: false\n"
+              "sandbox:\n  mode: temp\n"
+              "agents:\n  enabled: true\n  max_files: 4\n  max_changed_lines: 100\n"
+              "  require_human_approval_for_source: true\n"
+              "  allowed_roles: ImplementationAgent,TestingAgent\n",
+              encoding="utf-8",
+          )
+          patch = repo / "candidate.patch"
+          patch.write_text(
+              "--- a/app.py\n"
+              "+++ b/app.py\n"
+              "@@ -1,2 +1,2 @@\n"
+              " def add(a: int, b: int) -> int:\n"
+              "-    return a + b\n"
+              "+    return int(a + b)\n",
+              encoding="utf-8",
+          )
+
+          run = plan_agent_fix(
+              repo,
+              "Keep addition behavior typed",
+              agent_role="ImplementationAgent",
+              targets=["app.py"],
+              patch_file=patch,
+              sandbox="temp",
+          )
+          assert run.status == AgentRunStatus.AWAITING_APPROVAL, run.status
+          approved, token = approve_agent_run(
+              repo,
+              run.run_id,
+              "GitHub Actions",
+              "CI governance transaction",
+          )
+          assert approved.status == AgentRunStatus.APPROVED
+          verified = apply_agent_run(repo, run.run_id, token, sandbox="temp")
+          assert verified.status == AgentRunStatus.VERIFIED, verified.status
+          assert verified.verification_delta and verified.verification_delta.accepted
+          print(f"Verified agent run: {verified.run_id}")
+          print(f"State transition: {verified.base_state_hash[:12]} -> {verified.current_state_hash[:12]}")
+          PY
+
+      - name: Upload safe-fix artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-safe-fix-${{ github.run_number }}-${{ github.run_attempt }}
+          path: phase3-ci-fixture/.basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  command-center-platform:
+    name: Command Center Web App
+    runs-on: ubuntu-latest
+    needs: safe-fix-platform
+    timeout-minutes: 15
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Build Command Center truth snapshot
+        run: |
+          mkdir -p .basalt
+          basalt command-center . --snapshot --json > .basalt/command-center-snapshot.json
+
+      - name: Smoke test local HTTP API and security headers
+        run: |
+          python - <<'PY'
+          import json
+          import threading
+          from http.client import HTTPConnection
+          from pathlib import Path
+
+          from basalt_proof.command_center_server import create_command_center_server
+
+          server = create_command_center_server(Path('.'), host='127.0.0.1', port=0)
+          thread = threading.Thread(target=server.serve_forever, daemon=True)
+          thread.start()
+          try:
+              connection = HTTPConnection('127.0.0.1', server.server_address[1], timeout=10)
+              connection.request('GET', '/api/v1/overview')
+              response = connection.getresponse()
+              payload = json.loads(response.read().decode('utf-8'))
+              assert response.status == 200, response.status
+              assert response.getheader('X-Frame-Options') == 'DENY'
+              assert payload['truth']['graph_fresh'] is True
+              connection.close()
+          finally:
+              server.shutdown()
+              server.server_close()
+              thread.join(timeout=3)
+          PY
+
+      - name: Upload Command Center artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-command-center-${{ github.run_number }}-${{ github.run_attempt }}
+          path: .basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+
+  software-factory-platform:
+    name: Alpha AI Software Factory
+    runs-on: ubuntu-latest
+    needs: command-center-platform
+    timeout-minutes: 20
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Audit locked Basalt design system
+        run: basalt factory design-system .
+
+      - name: Plan, build, prove, and assemble an alpha product
+        run: |
+          rm -rf "$RUNNER_TEMP/basalt-alpha-product"
+          basalt factory create . \
+            --prompt "Build an authenticated booking platform with a dashboard, API, and notifications." \
+            --name "Basalt Factory CI Product" \
+            --template fullstack-lite \
+            --privacy local \
+            --sandbox temp \
+            --target "$RUNNER_TEMP/basalt-alpha-product"
+
+      - name: Enforce verified factory assembly
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          index = json.loads(Path('.basalt/factory-runs/index.json').read_text(encoding='utf-8'))
+          latest = index[0]
+          assert latest['status'] == 'VERIFIED', latest
+          assert latest['proof_status'] == 'VERIFIED', latest
+          assert int(latest['proof_score']) >= 98, latest
+          target = Path(latest['target_path'])
+          assert target.exists(), target
+          assert (target / '.basalt' / 'factory-proof' / 'proof-report.json').exists()
+          print(f"Factory run {latest['run_id']} assembled {target} at {latest['proof_score']}/100")
+          PY
+
+      - name: Smoke test factory state through Command Center API
+        run: |
+          python - <<'PY'
+          import json
+          import threading
+          from http.client import HTTPConnection
+          from pathlib import Path
+
+          from basalt_proof.command_center_server import create_command_center_server
+
+          server = create_command_center_server(Path('.'), host='127.0.0.1', port=0)
+          thread = threading.Thread(target=server.serve_forever, daemon=True)
+          thread.start()
+          try:
+              connection = HTTPConnection('127.0.0.1', server.server_address[1], timeout=10)
+              connection.request('GET', '/api/v1/factory')
+              response = connection.getresponse()
+              payload = json.loads(response.read().decode('utf-8'))
+              assert response.status == 200, response.status
+              assert payload['metrics']['total_runs'] >= 1, payload
+              assert payload['metrics']['verified_runs'] >= 1, payload
+              connection.close()
+          finally:
+              server.shutdown()
+              server.server_close()
+              thread.join(timeout=3)
+          PY
+
+      - name: Upload software factory artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-software-factory-${{ github.run_number }}-${{ github.run_attempt }}
+          path: .basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+
+  private-beta-platform:
+    name: Private Beta Full Build System
+    runs-on: ubuntu-latest
+    needs: software-factory-platform
+    timeout-minutes: 30
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Run Phase 6 private-beta tests
+        run: python -m unittest tests.test_phase6_private_beta -v
+
+      - name: Audit official Basalt design and brand system
+        run: |
+          basalt factory design-system .
+          test -s basalt_proof/webui/brand/basalt-wordmark-mask.png
+          test -s basalt_proof/webui/brand/basalt-wordmark-dark.png
+          test -s basalt_proof/webui/brand/basalt-wordmark-light.png
+
+      - name: Exercise durable private-beta build and deployment flow
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+
+          from basalt_proof.private_beta import PrivateBetaPlatform
+
+          fixture = Path(os.environ['RUNNER_TEMP']) / 'phase6-ci-project'
+          shutil.rmtree(fixture, ignore_errors=True)
+          (fixture / 'tests').mkdir(parents=True)
+          (fixture / 'app.py').write_text(
+              'def health():\n    return {"status": "ok"}\n',
+              encoding='utf-8',
+          )
+          (fixture / 'tests' / 'test_app.py').write_text(
+              'import unittest\nfrom app import health\n\n'
+              'class HealthTests(unittest.TestCase):\n'
+              '    def test_health(self):\n'
+              '        self.assertEqual(health()["status"], "ok")\n',
+              encoding='utf-8',
+          )
+          (fixture / 'basalt.yaml').write_text(
+              'project:\n  name: phase6-ci\n  type: python\n'
+              'commands:\n  lint: python -m compileall app.py tests\n'
+              '  test: python -m unittest discover -s tests -v\n'
+              'proof:\n  require_lint: true\n  require_tests: true\n  mutation_sample: false\n'
+              'sandbox:\n  mode: temp\n',
+              encoding='utf-8',
+          )
+
+          root = Path('.basalt/private-beta-ci')
+          platform = PrivateBetaPlatform(root)
+          bootstrap = platform.bootstrap('ci@basalt.local', 'Basalt CI', 'Basalt CI Team')
+          user_id = bootstrap['user']['user_id']
+          team_id = bootstrap['team']['team_id']
+          project = platform.add_project(
+              team_id,
+              'Basalt Private Beta CI',
+              fixture,
+              user_id,
+              template='saas-starter',
+              privacy_mode='local',
+          )
+          project_id = project['project_id']
+
+          verify_job = platform.submit_job(
+              project_id,
+              'VERIFY_PROJECT',
+              {'sandbox': 'temp'},
+              user_id,
+              idempotency_key='ci-verify',
+          )
+          verify_result = platform.run_job(verify_job['job_id'], 'ci-worker')
+          assert verify_result['status'] == 'SUCCEEDED', verify_result
+          assert verify_result['result']['status'] == 'VERIFIED', verify_result
+
+          create_job = platform.submit_job(
+              project_id,
+              'FACTORY_CREATE',
+              {
+                  'prompt': 'Build a multi-tenant operations platform with roles, subscriptions, an API, and a dashboard.',
+                  'name': 'Basalt Private Beta CI Product',
+                  'template': 'saas-starter',
+                  'sandbox': 'temp',
+              },
+              user_id,
+              idempotency_key='ci-factory-create',
+          )
+          create_result = platform.run_job(create_job['job_id'], 'ci-worker')
+          assert create_result['status'] == 'SUCCEEDED', create_result
+          assert create_result['result']['proof_status'] == 'VERIFIED', create_result
+          assert int(create_result['result']['proof_score']) >= 98, create_result
+
+          package_job = platform.submit_job(
+              project_id,
+              'PACKAGE_PREVIEW',
+              {
+                  'source_path': create_result['result']['target'],
+                  'proof_report': create_result['result']['proof_report'],
+                  'environment': 'preview',
+              },
+              user_id,
+              idempotency_key='ci-package-preview',
+          )
+          package_result = platform.run_job(package_job['job_id'], 'ci-worker')
+          assert package_result['status'] == 'SUCCEEDED', package_result
+          assert package_result['result']['status'] == 'PROMOTED', package_result
+          assert Path(package_result['result']['artifact_path']).exists()
+
+          snapshot = platform.write_snapshot(Path('.basalt/private-beta-ci-snapshot.json'))
+          print(f"Private-beta project: {project_id}")
+          print(f"Verified job: {verify_job['job_id']}")
+          print(f"Factory job: {create_job['job_id']}")
+          print(f"Deployment: {package_result['result']['deployment_id']}")
+          print(f"Snapshot: {snapshot}")
+          PY
+
+      - name: Smoke test private-beta Command Center API and official wordmark
+        run: |
+          python - <<'PY'
+          import json
+          import threading
+          from http.client import HTTPConnection
+          from pathlib import Path
+
+          from basalt_proof.command_center_server import create_command_center_server
+
+          server = create_command_center_server(Path('.'), host='127.0.0.1', port=0)
+          thread = threading.Thread(target=server.serve_forever, daemon=True)
+          thread.start()
+          try:
+              connection = HTTPConnection('127.0.0.1', server.server_address[1], timeout=10)
+              connection.request('GET', '/api/v1/beta')
+              response = connection.getresponse()
+              payload = json.loads(response.read().decode('utf-8'))
+              assert response.status == 200, response.status
+              assert payload['readiness']['persistent_projects'] is True
+              assert payload['readiness']['durable_jobs'] is True
+              assert payload['readiness']['production_cloud_deployments'] is False
+              connection.close()
+
+              connection = HTTPConnection('127.0.0.1', server.server_address[1], timeout=10)
+              connection.request('GET', '/assets/brand/basalt-wordmark-mask.png')
+              response = connection.getresponse()
+              body = response.read()
+              assert response.status == 200, response.status
+              assert response.getheader('Content-Type') == 'image/png'
+              assert len(body) > 128
+              connection.close()
+          finally:
+              server.shutdown()
+              server.server_close()
+              thread.join(timeout=3)
+          PY
+
+      - name: Upload private-beta artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-private-beta-${{ github.run_number }}-${{ github.run_attempt }}
+          path: .basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  proof:
+    name: Basalt Proof Gate
+    runs-on: ubuntu-latest
+    needs: [unit-tests, knowledge-platform, safe-fix-platform, command-center-platform, software-factory-platform, private-beta-platform]
+    timeout-minutes: 20
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Basalt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Run Basalt verification
+        continue-on-error: true
+        run: basalt verify .
+
+      - name: Enforce VERIFIED verdict
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          report_path = Path(".basalt/proof-report.json")
+          if not report_path.exists():
+              print("ERROR: Basalt did not generate a proof report.")
+              sys.exit(1)
+
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          status = report.get("final_status", "UNKNOWN")
+          score = report.get("score", 0)
+          sandbox = report.get("sandbox", "unknown")
+          mutations = report.get("mutations", [])
+          findings = report.get("security_findings", [])
+          graph = report.get("knowledge_graph", {})
+
+          survived = sum(1 for item in mutations if item.get("survived") is True)
+          high_findings = sum(
+              1 for item in findings
+              if str(item.get("level", "")).upper() == "HIGH"
+          )
+          state_hash = str(graph.get("state_hash", "missing"))
+          files_scanned = int(graph.get("files_scanned", 0))
+          symbols = len(graph.get("symbols", []))
+          edges = len(graph.get("edges", []))
+          features = len(graph.get("features", []))
+          test_mappings = len(graph.get("test_mappings", []))
+          fresh = bool(graph.get("fresh", False))
+
+          print(f"Basalt verdict: {status}")
+          print(f"Proof score: {score}/100")
+          print(f"Sandbox: {sandbox}")
+          print(f"Survived mutations: {survived}")
+          print(f"High findings: {high_findings}")
+          print(f"Graph fresh: {fresh}")
+          print(f"Graph state: {state_hash}")
+          print(f"Files / symbols / edges: {files_scanned} / {symbols} / {edges}")
+          print(f"Features / test mappings: {features} / {test_mappings}")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as summary:
+                  summary.write("# Basalt v2.5 Private Beta Full Build System Report\n\n")
+                  summary.write(f"- **Verdict:** `{status}`\n")
+                  summary.write(f"- **Proof score:** `{score}/100`\n")
+                  summary.write(f"- **Sandbox:** `{sandbox}`\n")
+                  summary.write(f"- **Survived mutations:** `{survived}`\n")
+                  summary.write(f"- **High findings:** `{high_findings}`\n")
+                  summary.write(f"- **Graph fresh:** `{fresh}`\n")
+                  summary.write(f"- **Graph state:** `{state_hash[:16]}…`\n")
+                  summary.write(f"- **Files:** `{files_scanned}`\n")
+                  summary.write(f"- **Symbols:** `{symbols}`\n")
+                  summary.write(f"- **Edges:** `{edges}`\n")
+                  summary.write(f"- **Features:** `{features}`\n")
+                  summary.write(f"- **Test mappings:** `{test_mappings}`\n")
+                  summary.write("- **Phase 6 private beta:** `projects + durable jobs + isolated workspaces + providers + verified deployment artifacts`\n")
+
+          if status != "VERIFIED":
+              print(f"ERROR: Repository verdict is {status}, not VERIFIED.")
+              sys.exit(1)
+          if not fresh or not state_hash or state_hash == "missing":
+              print("ERROR: Project Knowledge Graph is missing or stale.")
+              sys.exit(1)
+          if files_scanned == 0 or symbols == 0 or edges == 0:
+              print("ERROR: Project Knowledge Graph has insufficient deterministic truth.")
+              sys.exit(1)
+          print("Basalt Proof Gate passed.")
+          PY
+
+      - name: Upload Basalt proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: basalt-proof-${{ github.run_number }}-${{ github.run_attempt }}
+          path: .basalt/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

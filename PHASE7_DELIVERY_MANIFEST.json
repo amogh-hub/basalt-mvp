@@ -1,0 +1,124 @@
+{
+  "version": "3.0.0rc3",
+  "delivery": "Phase 7.1 Professional Engineering Workspace Release Candidate",
+  "baseline": "3.0.0rc2 accepted with 203 tests on project Mac",
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha256": "5f1c4ba0fc4ec9091dbff0f6adaa2188b960744d1c6a208d1eb1cefc560d5d43",
+      "bytes": 529
+    },
+    {
+      "path": "README.md",
+      "sha256": "3f1c58725a39d150dae5835b61d903c86ab056f8beebaecb00d501db5cfb5935",
+      "bytes": 9799
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "6a8a8afbb7d01be6a34dc978da5aa067335f86ec8f50741665b18c5338c7b7ba",
+      "bytes": 11694
+    },
+    {
+      "path": "PHASE7_HANDOFF.md",
+      "sha256": "77654d603f1ddd17923a77b9e5682d3ca88c5d778934d5efbd27a95d28a3ba28",
+      "bytes": 778
+    },
+    {
+      "path": "docs/PHASE7_MASTER_SPEC.md",
+      "sha256": "dea39e38430e44cb2acfb2fc558706c52b135f5224078d731c9db08a1feebccc",
+      "bytes": 4034
+    },
+    {
+      "path": "docs/PHASE7_VALIDATION_REPORT.md",
+      "sha256": "8962e2166d1d9336ad03533a171975a8f42ff40f1ab2b98243cc9903c40a4fc2",
+      "bytes": 2171
+    },
+    {
+      "path": "docs/RELEASE_NOTES_V3_RC3.md",
+      "sha256": "592493c60600b352ce01fb264318c59a89f8036f5d6b11ca659cfe7cd32c7d0c",
+      "bytes": 1496
+    },
+    {
+      "path": "basalt_proof/__init__.py",
+      "sha256": "f4273e9ee46d68f4ed367e66758273128f61de0ccbd13c65b6c4a979cf01904b",
+      "bytes": 25
+    },
+    {
+      "path": "basalt_proof/models.py",
+      "sha256": "14d91fda6941d8edc161a6ee600ba37457059daf66cca49dc73145772725f004",
+      "bytes": 12538
+    },
+    {
+      "path": "basalt_proof/private_beta.py",
+      "sha256": "1ec82f24afaf222e0be6a48f67ce650e505664daa1f204db077fe59b0cd11a7b",
+      "bytes": 10678
+    },
+    {
+      "path": "basalt_proof/dashboard.py",
+      "sha256": "268c9104752c46bc029c337717cec9ba53fd5f608af6175251bdad3c3bb06bc8",
+      "bytes": 12007
+    },
+    {
+      "path": "basalt_proof/command_center_server.py",
+      "sha256": "b07d14956dcd398c8552fac19c6c6f57919c670e57d4344d43535337cec0565a",
+      "bytes": 27402
+    },
+    {
+      "path": "basalt_proof/workspace_service.py",
+      "sha256": "195015df76c84482dc9be0ea57ddf6ab378b704b7924728bfce6dc7115bd9437",
+      "bytes": 19795
+    },
+    {
+      "path": "basalt_proof/webui/workspace.html",
+      "sha256": "1ad24fdafcb278427e3761d189f9ce1f673d36cbab6204122757b6dd77bf14b6",
+      "bytes": 8368
+    },
+    {
+      "path": "basalt_proof/webui/workspace.css",
+      "sha256": "0a5c483549f164ee5441611a066bbb7c7225a925462bbf013b2ae473bf9a36b6",
+      "bytes": 17762
+    },
+    {
+      "path": "basalt_proof/webui/workspace.js",
+      "sha256": "09e22eb4002c5ebfdeb3c20b65870ba52601f3699ecb0ed9a24bd39989d9fccb",
+      "bytes": 33407
+    },
+    {
+      "path": "tests/test_phase7_production_workspace.py",
+      "sha256": "b7f20a7d53c93bfce31963808aa49c2b6da16556bf4297a2c2fbc06c495e1548",
+      "bytes": 12276
+    }
+  ],
+  "validation": {
+    "python_compileall": "PASS",
+    "workspace_javascript_syntax": "PASS",
+    "phase7_workspace_tests": 19,
+    "non_phase3_tests_passed_in_delivery_container": 185,
+    "expected_complete_mac_suite": 210,
+    "full_suite": "REQUIRES_MAC_RERUN_DUE_DELIVERY_CONTAINER_TIMEOUT_ON_UNCHANGED_PHASE3_PROOF_HEAVY_SUITE"
+  },
+  "scope": {
+    "complete": [
+      "multi-file tabs",
+      "line numbers and syntax layer",
+      "diagnostics",
+      "diff-before-save",
+      "stale conflict handling",
+      "contextual search",
+      "Git visibility",
+      "resizable panes",
+      "command palette",
+      "Build/Proof/Activity/Git panels"
+    ],
+    "not_claimed": [
+      "agent execution",
+      "live application preview",
+      "architecture canvases",
+      "hosted identity",
+      "distributed production workers",
+      "cloud deployment connectors",
+      "production monitoring",
+      "Production Basalt v1 GA"
+    ]
+  }
+}

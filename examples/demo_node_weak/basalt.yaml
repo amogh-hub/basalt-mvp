@@ -1,0 +1,26 @@
+project:
+  name: demo-node-weak
+  type: node
+commands:
+  install: null
+  build: null
+  lint: node --check app.js && node --check tests/test.js
+  typecheck: null
+  test: npm test
+proof:
+  require_build: false
+  require_lint: false
+  require_typecheck: false
+  require_tests: true
+  mutation_sample: true
+  mutation_max: 4
+  security_scan: basic
+  dashboard: true
+  patch_plan: true
+  pr_pack: true
+policy:
+  block_secrets: true
+  block_destructive_migrations: true
+  require_human_approval_for_deploy: true
+sandbox:
+  mode: temp

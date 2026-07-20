@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Basalt Build Workspace</title>
+  <link rel="stylesheet" href="/assets/workspace.css">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <a href="/" class="brand" aria-label="Basalt Command Center"><img src="/assets/brand/basalt-wordmark-dark.png" alt="Basalt"></a>
+    <div class="project-context">
+      <strong id="workspace-title">Production Workspace</strong>
+      <span id="workspace-version">Loading</span>
+      <span id="branch-chip" class="chip">Git pending</span>
+    </div>
+    <div class="top-actions">
+      <span id="save-state" class="status-text">Ready</span>
+      <button id="palette-button" class="quiet-button" type="button" title="Command palette (⌘K)">Command palette</button>
+      <a href="/" class="command-center-link">Command Center</a>
+    </div>
+  </header>
+
+  <main id="workspace-grid">
+    <aside id="explorer" class="left-pane">
+      <div class="pane-heading">
+        <span>EXPLORER</span>
+        <button id="refresh-tree" class="icon-button" type="button" title="Refresh repository">↻</button>
+      </div>
+      <label class="search-box">
+        <span aria-hidden="true">⌕</span>
+        <input id="file-search" placeholder="Search files and code" autocomplete="off">
+        <kbd>⌘⇧F</kbd>
+      </label>
+      <div id="search-summary" class="search-summary hidden"></div>
+      <div id="tree" class="tree" role="tree" aria-label="Repository files"></div>
+      <div id="search-results" class="search-results hidden"></div>
+    </aside>
+
+    <div id="left-resizer" class="resizer" role="separator" aria-label="Resize explorer" aria-orientation="vertical"></div>
+
+    <section class="editor-shell">
+      <div id="file-tabs" class="file-tabs" role="tablist" aria-label="Open files"></div>
+      <div class="editor-toolbar">
+        <div class="breadcrumbs" id="breadcrumbs">Select a file from the repository</div>
+        <div class="editor-actions">
+          <button id="reload-file" class="quiet-button" type="button" disabled>Reload</button>
+          <button id="review-diff" class="quiet-button" type="button" disabled>Review diff</button>
+          <button id="save" class="primary-button" type="button" disabled>Save</button>
+        </div>
+      </div>
+      <div id="empty-editor" class="empty-editor">
+        <div class="empty-mark">B</div>
+        <h1>Verified software, not vibes.</h1>
+        <p>Open a repository file, inspect its diagnostics, review the governed diff, then save atomically.</p>
+        <div class="shortcut-grid">
+          <span><kbd>⌘P</kbd> Open command palette</span>
+          <span><kbd>⌘S</kbd> Review and save</span>
+          <span><kbd>⌘⇧F</kbd> Search repository</span>
+        </div>
+      </div>
+      <div id="editor-frame" class="editor-frame hidden">
+        <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
+        <div class="code-stage">
+          <pre id="highlight" aria-hidden="true"><code></code></pre>
+          <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off" disabled aria-label="Code editor"></textarea>
+        </div>
+      </div>
+      <div class="diagnostics-strip">
+        <button id="diagnostics-summary" class="diagnostics-summary" type="button" disabled>
+          <span id="diagnostics-dot" class="diagnostics-dot"></span>
+          <span id="diagnostics-label">No file selected</span>
+        </button>
+        <span id="file-meta">UTF-8</span>
+      </div>
+    </section>
+
+    <div id="right-resizer" class="resizer" role="separator" aria-label="Resize engineering panel" aria-orientation="vertical"></div>
+
+    <aside id="engineering-panel" class="right-pane">
+      <div class="panel-tabs" role="tablist" aria-label="Engineering panels">
+        <button class="panel-tab active" data-panel="build" type="button">Build</button>
+        <button class="panel-tab" data-panel="proof" type="button">Proof</button>
+        <button class="panel-tab" data-panel="activity" type="button">Activity</button>
+        <button class="panel-tab" data-panel="git" type="button">Git</button>
+      </div>
+
+      <section id="panel-build" class="panel-view active">
+        <div id="truth" class="truth-card"></div>
+        <div class="commands" id="command-buttons">
+          <button data-command="lint" type="button">Lint</button>
+          <button data-command="test" type="button">Test</button>
+          <button data-command="typecheck" type="button">Typecheck</button>
+          <button data-command="build" type="button">Build</button>
+        </div>
+        <div class="console-heading">
+          <span>CONFIGURED CONSOLE</span>
+          <div><button id="copy-console" class="text-button" type="button">Copy</button><button id="clear-console" class="text-button" type="button">Clear</button></div>
+        </div>
+        <pre id="terminal">Configured commands only. Arbitrary shell execution is disabled.</pre>
+      </section>
+
+      <section id="panel-proof" class="panel-view">
+        <div class="panel-section-heading"><span>PROOF STATE</span><button id="refresh-proof" class="text-button" type="button">Refresh</button></div>
+        <div id="proof-content" class="panel-scroll empty-panel">No proof report loaded.</div>
+      </section>
+
+      <section id="panel-activity" class="panel-view">
+        <div class="panel-section-heading"><span>WORKSPACE EVENTS</span><button id="refresh-activity" class="text-button" type="button">Refresh</button></div>
+        <div id="activity-content" class="panel-scroll empty-panel">No workspace activity recorded.</div>
+      </section>
+
+      <section id="panel-git" class="panel-view">
+        <div class="panel-section-heading"><span>REPOSITORY STATE</span><button id="refresh-git" class="text-button" type="button">Refresh</button></div>
+        <div id="git-content" class="panel-scroll empty-panel">Git state not loaded.</div>
+      </section>
+    </aside>
+  </main>
+
+  <footer>
+    <div class="footer-left"><span class="footer-brand">Proof before trust</span><span id="footer-path">No file selected</span></div>
+    <div class="footer-right"><span id="cursor-position">Ln 1, Col 1</span><span id="footer-language">Plain Text</span><span>UTF-8</span></div>
+  </footer>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<dialog id="diff-dialog" class="workspace-dialog">
+  <form method="dialog" class="dialog-card wide" id="diff-form">
+    <div class="dialog-heading">
+      <div><p class="eyebrow">GOVERNED DIFF</p><h2 id="diff-title">Review changes</h2></div>
+      <button class="icon-button" value="cancel" aria-label="Close">×</button>
+    </div>
+    <div id="diff-summary" class="diff-summary"></div>
+    <pre id="diff-output" class="diff-output"></pre>
+    <div id="conflict-actions" class="conflict-actions hidden">
+      <p>The repository version changed after this tab was opened. Reload the file before saving.</p>
+      <button id="reload-conflict" class="primary-button" type="button">Reload repository version</button>
+    </div>
+    <div class="dialog-actions"><button class="quiet-button" value="cancel">Cancel</button><button id="confirm-save" class="primary-button" type="button">Save atomically</button></div>
+  </form>
+</dialog>
+
+<dialog id="diagnostics-dialog" class="workspace-dialog">
+  <form method="dialog" class="dialog-card" id="diagnostics-form">
+    <div class="dialog-heading"><div><p class="eyebrow">CURRENT FILE</p><h2>Diagnostics</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+    <div id="diagnostics-list" class="diagnostics-list"></div>
+    <div class="dialog-actions"><button class="quiet-button" value="cancel">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="command-palette" class="workspace-dialog palette-dialog">
+  <div class="dialog-card palette-card">
+    <label class="palette-search"><span>⌘</span><input id="palette-input" placeholder="Search commands and open files" autocomplete="off"></label>
+    <div id="palette-results" class="palette-results"></div>
+    <div class="palette-footer"><span>↑↓ Navigate</span><span>Enter Run</span><span>Esc Close</span></div>
+  </div>
+</dialog>
+
+<script src="/assets/workspace.js" defer></script>
+</body>
+</html>
