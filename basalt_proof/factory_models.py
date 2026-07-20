@@ -174,6 +174,8 @@ class AgentExecutionRecord:
     artifacts: list[str] = field(default_factory=list)
     model_assignment: dict[str, Any] = field(default_factory=dict)
     risk_flags: list[str] = field(default_factory=list)
+    execution_mode: str = "DETERMINISTIC_LOCAL"
+    dependency_ids: list[str] = field(default_factory=list)
 
 
 @dataclass

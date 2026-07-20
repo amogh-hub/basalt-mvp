@@ -1,6 +1,6 @@
 [project]
 name = "basalt-mvp"
-version = "3.0.0rc3"
+version = "3.0.0rc4"
 description = "Basalt v3.0 Production Candidate: verified Build Workspace, Command Center, governed engineering workflows, and production control foundations."
 readme = "README.md"
 requires-python = ">=3.10"

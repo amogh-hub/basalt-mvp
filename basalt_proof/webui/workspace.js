@@ -11,6 +11,8 @@ const state = {
   paletteItems: [],
   paletteIndex: 0,
   activePanel: "build",
+  searchQuery: "",
+  restoring: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -254,6 +256,17 @@ function updateEditorForActiveTab() {
   renderLineNumbers(tabState.content);
   renderHighlight(tabState.content, tabState.language);
   syncEditorScroll();
+  requestAnimationFrame(() => {
+    const code = $("code");
+    const max = code.value.length;
+    const start = Math.max(0, Math.min(Number(tabState.cursorStart || 0), max));
+    const end = Math.max(start, Math.min(Number(tabState.cursorEnd || start), max));
+    code.setSelectionRange(start, end);
+    code.scrollTop = Number(tabState.scrollTop || 0);
+    code.scrollLeft = Number(tabState.scrollLeft || 0);
+    syncEditorScroll();
+    updateCursorPosition();
+  });
   renderDiagnosticsSummary(state.diagnostics.get(tabState.path));
   updateCursorPosition();
   updateActionState();
@@ -261,9 +274,11 @@ function updateEditorForActiveTab() {
 
 function activateTab(path) {
   if (!state.tabs.has(path)) return;
+  captureActiveTabView();
   state.activePath = path;
   updateEditorForActiveTab();
   scheduleDiagnostics();
+  persistWorkspaceState();
 }
 
 function closeTab(path) {
@@ -277,6 +292,7 @@ function closeTab(path) {
     state.activePath = state.order[index] || state.order[index - 1] || state.order.at(-1) || "";
   }
   updateEditorForActiveTab();
+  persistWorkspaceState();
 }
 
 async function openFile(path, line = 0) {
@@ -297,17 +313,28 @@ async function openFile(path, line = 0) {
   }
 }
 
-function goToLine(line) {
+function goToLocation(line, column = 1, endColumn = null) {
   const code = $("code");
   const lines = code.value.split("\n");
-  const target = Math.max(1, Math.min(Number(line) || 1, lines.length));
-  const position = lines.slice(0, target - 1).reduce((sum, item) => sum + item.length + 1, 0);
+  const targetLine = Math.max(1, Math.min(Number(line) || 1, lines.length));
+  const lineText = lines[targetLine - 1] || "";
+  const targetColumn = Math.max(1, Math.min(Number(column) || 1, lineText.length + 1));
+  const lineStart = lines.slice(0, targetLine - 1).reduce((sum, item) => sum + item.length + 1, 0);
+  const start = lineStart + targetColumn - 1;
+  const requestedEnd = endColumn == null ? targetColumn : Number(endColumn) || targetColumn;
+  const end = lineStart + Math.max(targetColumn - 1, Math.min(requestedEnd - 1, lineText.length));
   code.focus();
-  code.setSelectionRange(position, position);
+  code.setSelectionRange(start, Math.max(start, end));
   const lineHeight = parseFloat(getComputedStyle(code).lineHeight) || 20.8;
-  code.scrollTop = Math.max(0, (target - 4) * lineHeight);
+  code.scrollTop = Math.max(0, (targetLine - 4) * lineHeight);
   syncEditorScroll();
   updateCursorPosition();
+  captureActiveTabView();
+  persistWorkspaceState();
+}
+
+function goToLine(line) {
+  goToLocation(line, 1);
 }
 
 async function reloadActive(force = false) {
@@ -319,6 +346,7 @@ async function reloadActive(force = false) {
     state.tabs.set(tabState.path, { ...file, originalContent: file.content, dirty: false });
     updateEditorForActiveTab();
     await runDiagnostics();
+    persistWorkspaceState();
     toast("Repository version reloaded.");
   } catch (error) {
     toast(error.message, true);
@@ -337,6 +365,8 @@ function onEditorInput() {
   renderTabs();
   updateActionState();
   $("file-meta").textContent = `${tabState.line_count} lines · ${tabState.size_bytes} bytes · unsaved`;
+  captureActiveTabView();
+  persistWorkspaceState();
   scheduleDiagnostics();
 }
 
@@ -392,7 +422,7 @@ function showDiagnostics() {
       card.type = "button";
       card.append(node("strong", "", `${item.severity} · ${item.code || "DIAGNOSTIC"}`));
       card.append(node("p", "", `Line ${item.line}, column ${item.column} — ${item.message}`));
-      card.addEventListener("click", () => { $("diagnostics-dialog").close(); goToLine(item.line); });
+      card.addEventListener("click", () => { $("diagnostics-dialog").close(); goToLocation(item.line, item.column, item.end_column); });
       list.append(card);
     });
     root.append(list);
@@ -450,6 +480,7 @@ async function persistSave() {
     $("diff-dialog").close();
     updateEditorForActiveTab();
     await Promise.all([loadActivity(), loadGit()]);
+    persistWorkspaceState();
     toast("Saved atomically after governed diff review.");
   } catch (error) {
     setSaveState("Conflict", true);
@@ -461,7 +492,9 @@ async function persistSave() {
 }
 
 async function searchRepository(query) {
-  const term = query.trim();
+  state.searchQuery = String(query || "");
+  persistWorkspaceState();
+  const term = state.searchQuery.trim();
   const tree = $("tree");
   const results = $("search-results");
   if (term.length < 2) {
@@ -493,6 +526,7 @@ async function searchRepository(query) {
 
 function switchPanel(name) {
   state.activePanel = name;
+  persistWorkspaceState();
   qsa(".panel-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === name));
   qsa(".panel-view").forEach((panel) => panel.classList.toggle("active", panel.id === `panel-${name}`));
   if (name === "proof") loadProof();
@@ -536,9 +570,9 @@ async function loadProof() {
     const checks = Array.isArray(report.checks) ? report.checks : [];
     const passed = checks.filter((item) => item.status === "PASS").length;
     const failed = checks.filter((item) => item.status === "FAIL").length;
-    const skipped = checks.filter((item) => item.status === "SKIP").length;
+    const skipped = checks.filter((item) => ["SKIP", "SKIPPED", "NOT_APPLICABLE"].includes(String(item.status || "").toUpperCase())).length;
     const grid = node("div", "metric-grid");
-    [["Proof score", `${score}/100`], ["Checks", `${passed}/${checks.length || 0}`], ["Failed", failed], ["Skipped", skipped]].forEach(([label, value]) => {
+    [["Proof score", `${score}/100`], ["Applicable checks", `${passed}/${Math.max(0, checks.length - skipped)}`], ["Failed", failed], ["Skipped", skipped]].forEach(([label, value]) => {
       const metric = node("div", "metric");
       metric.append(node("span", "", label), node("strong", "", value));
       grid.append(metric);
@@ -603,22 +637,46 @@ async function loadGit() {
     }
     $("branch-chip").textContent = `${git.branch}${git.dirty ? ` · ${git.items.length} changed` : " · clean"}`;
     const grid = node("div", "metric-grid");
-    [["Branch", git.branch], ["Commit", git.commit], ["Ahead", git.ahead], ["Behind", git.behind]].forEach(([label, value]) => {
+    [["Branch", git.branch], ["Commit", git.commit], ["Ahead", git.ahead], ["Behind", git.behind], ["Staged", git.summary?.staged || 0], ["Untracked", git.summary?.untracked || 0]].forEach(([label, value]) => {
       const metric = node("div", "metric"); metric.append(node("span", "", label), node("strong", "", value)); grid.append(metric);
     });
     root.append(grid);
     const badge = node("div", `status-badge ${git.dirty ? "warn" : "good"}`, git.dirty ? "WORKTREE MODIFIED" : "WORKTREE CLEAN");
     root.append(badge);
+    root.append(node("p", "git-truth", `Read-only Git inspection · upstream ${git.upstream || "not configured"} · commit/push disabled`));
+    const diffOutput = node("pre", "git-diff-output", "Select a changed file to inspect its diff.");
     if (git.items.length) {
       const list = node("div", "git-list");
       git.items.forEach((item) => {
         const card = node("button", "git-item");
         card.type = "button";
+        const scope = item.untracked ? "untracked" : [item.staged ? "staged" : "", item.unstaged ? "unstaged" : ""].filter(Boolean).join(" + ");
         card.append(node("strong", "", `${item.status}  ${item.path}`));
-        card.addEventListener("click", () => openFile(item.path.replace(/^.* -> /, "")));
+        card.append(node("p", "", scope || "changed"));
+        card.addEventListener("click", async () => {
+          try {
+            const staged = item.staged && !item.unstaged;
+            const data = await api(`/api/v1/workspace/git/diff?path=${encodeURIComponent(item.path)}&staged=${staged}`);
+            diffOutput.textContent = data.diff || "No diff available.";
+          } catch (error) {
+            diffOutput.textContent = error.message;
+          }
+        });
         list.append(card);
       });
       root.append(list);
+    }
+    root.append(diffOutput);
+    if (git.commits?.length) {
+      const heading = node("h3", "git-history-title", "Recent commits");
+      const history = node("div", "event-list");
+      git.commits.forEach((item) => {
+        const card = node("div", "event-item");
+        card.append(node("strong", "", `${item.commit} · ${item.subject}`));
+        card.append(node("p", "", `${item.author} · ${new Date(item.created_at).toLocaleString()}`));
+        history.append(card);
+      });
+      root.append(heading, history);
     }
   } catch (error) {
     root.className = "panel-scroll empty-panel";
@@ -630,9 +688,9 @@ function paletteCommands() {
   const commands = [
     { icon: "S", title: "Review diff and save current file", detail: "⌘S", action: reviewDiff },
     { icon: "R", title: "Reload current file", detail: "Repository version", action: reloadActive },
-    { icon: "T", title: "Run test command", detail: "Build control", action: () => runCommand("test") },
-    { icon: "L", title: "Run lint command", detail: "Build control", action: () => runCommand("lint") },
-    { icon: "B", title: "Run build command", detail: "Build control", action: () => runCommand("build") },
+    ...["test", "lint", "build", "typecheck", "install"]
+      .filter((name) => Boolean(state.snapshot?.commands?.[name]))
+      .map((name) => ({ icon: name[0].toUpperCase(), title: `Run ${name} command`, detail: state.snapshot.commands[name], action: () => runCommand(name) })),
     { icon: "P", title: "Show Proof panel", detail: "Engineering panel", action: () => switchPanel("proof") },
     { icon: "A", title: "Show Activity panel", detail: "Engineering panel", action: () => switchPanel("activity") },
     { icon: "G", title: "Show Git panel", detail: "Engineering panel", action: () => switchPanel("git") },
@@ -677,6 +735,108 @@ function executePaletteItem(index = state.paletteIndex) {
   Promise.resolve(item.action()).catch((error) => toast(error.message, true));
 }
 
+function workspaceStorageKey(kind) {
+  const repo = state.snapshot?.repo || window.location.pathname;
+  return `basalt-workspace:${kind}:${repo}`;
+}
+
+function captureActiveTabView() {
+  const tabState = currentTab();
+  const code = $("code");
+  if (!tabState || !code || $("editor-frame").classList.contains("hidden")) return;
+  tabState.cursorStart = code.selectionStart;
+  tabState.cursorEnd = code.selectionEnd;
+  tabState.scrollTop = code.scrollTop;
+  tabState.scrollLeft = code.scrollLeft;
+}
+
+function persistWorkspaceState() {
+  if (state.restoring || !state.snapshot) return;
+  try {
+    captureActiveTabView();
+    let budget = 900000;
+    const tabs = state.order.map((path) => {
+      const tab = state.tabs.get(path);
+      if (!tab) return null;
+      const record = {
+        path,
+        dirty: Boolean(tab.dirty),
+        sha256: tab.sha256,
+        cursorStart: Number(tab.cursorStart || 0),
+        cursorEnd: Number(tab.cursorEnd || tab.cursorStart || 0),
+        scrollTop: Number(tab.scrollTop || 0),
+        scrollLeft: Number(tab.scrollLeft || 0),
+      };
+      if (tab.dirty) {
+        const size = new TextEncoder().encode(`${tab.content || ""}${tab.originalContent || ""}`).length;
+        if (size <= budget && size <= 400000) {
+          record.content = tab.content;
+          record.originalContent = tab.originalContent;
+          budget -= size;
+        } else {
+          record.dirty = false;
+        }
+      }
+      return record;
+    }).filter(Boolean);
+    sessionStorage.setItem(workspaceStorageKey("session"), JSON.stringify({ tabs, activePath: state.activePath }));
+    localStorage.setItem(workspaceStorageKey("ui"), JSON.stringify({
+      activePanel: state.activePanel,
+      searchQuery: state.searchQuery,
+    }));
+  } catch (error) {
+    console.warn("Workspace continuity state could not be saved", error);
+  }
+}
+
+async function restoreWorkspaceState() {
+  state.restoring = true;
+  try {
+    const ui = JSON.parse(localStorage.getItem(workspaceStorageKey("ui")) || "{}");
+    if (["build", "proof", "activity", "git"].includes(ui.activePanel)) state.activePanel = ui.activePanel;
+    state.searchQuery = typeof ui.searchQuery === "string" ? ui.searchQuery : "";
+
+    const saved = JSON.parse(sessionStorage.getItem(workspaceStorageKey("session")) || "{}");
+    const records = Array.isArray(saved.tabs) ? saved.tabs.slice(0, 24) : [];
+    for (const record of records) {
+      if (!record?.path || !state.flatFiles.some((item) => item.path === record.path)) continue;
+      try {
+        const file = await api(`/api/v1/workspace/file?path=${encodeURIComponent(record.path)}`);
+        const unchanged = !record.sha256 || record.sha256 === file.sha256;
+        const restoreDirty = Boolean(record.dirty && typeof record.content === "string" && typeof record.originalContent === "string");
+        const tab = {
+          ...file,
+          originalContent: restoreDirty ? record.originalContent : file.content,
+          content: restoreDirty ? record.content : file.content,
+          dirty: restoreDirty && record.content !== record.originalContent,
+          cursorStart: record.cursorStart || 0,
+          cursorEnd: record.cursorEnd || record.cursorStart || 0,
+          scrollTop: record.scrollTop || 0,
+          scrollLeft: record.scrollLeft || 0,
+        };
+        if (restoreDirty && !unchanged) {
+          tab.sha256 = record.sha256;
+          tab.stale = true;
+        }
+        state.tabs.set(record.path, tab);
+        state.order.push(record.path);
+      } catch (_) {
+        // A deleted or protected file is intentionally skipped.
+      }
+    }
+    state.activePath = state.tabs.has(saved.activePath) ? saved.activePath : (state.order.at(-1) || "");
+    switchPanel(state.activePanel);
+    if (state.searchQuery) {
+      $("file-search").value = state.searchQuery;
+      await searchRepository(state.searchQuery);
+    }
+  } catch (error) {
+    console.warn("Workspace continuity state could not be restored", error);
+  } finally {
+    state.restoring = false;
+  }
+}
+
 function installResizer(handleId, side) {
   const handle = $(handleId);
   handle.addEventListener("pointerdown", (event) => {
@@ -696,6 +856,7 @@ function installResizer(handleId, side) {
       handle.classList.remove("dragging");
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      persistWorkspaceState();
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -736,9 +897,9 @@ function installKeyboardShortcuts() {
 
 function wireUi() {
   $("code").addEventListener("input", onEditorInput);
-  $("code").addEventListener("scroll", syncEditorScroll);
-  $("code").addEventListener("keyup", updateCursorPosition);
-  $("code").addEventListener("click", updateCursorPosition);
+  $("code").addEventListener("scroll", () => { syncEditorScroll(); captureActiveTabView(); persistWorkspaceState(); });
+  $("code").addEventListener("keyup", () => { updateCursorPosition(); captureActiveTabView(); persistWorkspaceState(); });
+  $("code").addEventListener("click", () => { updateCursorPosition(); captureActiveTabView(); persistWorkspaceState(); });
   $("save").addEventListener("click", reviewDiff);
   $("review-diff").addEventListener("click", reviewDiff);
   $("reload-file").addEventListener("click", () => reloadActive(false));
@@ -798,7 +959,11 @@ async function initialize() {
     button.title = state.snapshot.commands?.[button.dataset.command] || `No ${button.dataset.command} command configured`;
   });
   await Promise.all([loadTree(), loadGit(), loadProof(), loadActivity()]);
+  await restoreWorkspaceState();
   updateEditorForActiveTab();
+  if (currentTab()?.stale) toast("An unsaved tab was restored against a changed repository file. Review the conflict before saving.", true);
+  window.addEventListener("beforeunload", persistWorkspaceState);
+  persistWorkspaceState();
 }
 
 initialize().catch((error) => {

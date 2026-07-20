@@ -1,277 +1,228 @@
-# Basalt v2.5 Private Beta Full Build System
+# Basalt v3 Production Candidate
 
-**Version:** `2.5.0b3`
+**Version:** `3.0.0rc4`
+
+**Phase:** 7 — Production Basalt v1
+
 **Core promise:** **Verified software, not vibes.**
 
-Basalt is a proof-first, prevention-first AI software factory. Phase 6 turns the bounded local alpha factory into a persistent private-beta control plane with projects, team roles, durable jobs, isolated workspaces, provider integrations, broader product templates, verified deployment artifacts, and an expanded Command Center.
+Basalt is a proof-first AI software factory and governed engineering workspace. It connects repository truth, architecture, planning, editing, verification, approvals, state transactions, rollback, evidence, release controls, and local operational visibility in one system.
 
-Basalt still does not trust generated software because it looks plausible. Work moves forward only through explicit product truth, policy, isolated execution, proof, approvals, and auditable state transitions.
+RC4 is the hardened Phase 7 source candidate. It preserves the accepted RC3 workflow while correcting release identity, proof-count truth, workspace continuity, diagnostic precision, transaction synchronization, evidence provenance, factory rollback, and deterministic-agent language.
 
-## Phase 6 capabilities
+## Product surfaces
 
-### Persistent users, teams, and projects
+### Build Workspace
 
-The private-beta registry stores:
+The browser workspace provides:
 
-- users and private teams
-- owner, admin, developer, reviewer, and viewer roles
-- project registration and status
-- project privacy mode and default branch
-- append-only activity history
+- repository explorer and contextual code search;
+- multiple file tabs with unsaved-state tracking;
+- line numbers, syntax rendering, cursor metadata, and bounded diagnostics;
+- exact diagnostic navigation to file, line, and column;
+- governed diff review before atomic saves;
+- stale-state detection and explicit repository reload;
+- configured-command-only Build console;
+- Proof, Activity, and read-only Git engineering panels;
+- Git branch, status, diff, untracked-file, and recent-history visibility;
+- session restoration for tabs, active file, unsaved buffers, cursor, scroll, search, selected panel, and pane sizes;
+- command-palette entries that match actually configured commands.
 
-Role checks are enforced before project, job, or deployment actions.
+Arbitrary shell execution, browser commits, browser pushes, protected-directory editing, and silent stale writes remain disabled.
 
-### Durable job execution
+### Command Center
 
-Long-running work is represented as persistent jobs rather than browser requests:
+The Command Center provides:
 
-- `VERIFY_PROJECT`
-- `FACTORY_PLAN`
-- `FACTORY_CREATE`
-- `PACKAGE_PREVIEW`
+- repository proof and score breakdown;
+- Product Brain and governed factory planning;
+- deterministic dependency-ordered specialist work records;
+- architecture, API, database, and dependency canvases derived from source truth;
+- Project Knowledge Graph and impact/context tools;
+- safe same-origin static preview lifecycle controls;
+- agent and factory transaction ledgers;
+- approval decisions with complete patch, policy, hash, impact, and proof context;
+- append-only state transitions and rollback controls;
+- local users, teams, projects, durable jobs, providers, and deployment ledgers;
+- local operations, incident, and recovery visibility;
+- evidence grouped by proof, agent run, factory run, or control-plane origin with SHA-256 integrity metadata.
 
-The SQLite job runtime provides idempotency keys, worker ownership, leases, heartbeats, cancellation, bounded retries, retry waiting, and lifecycle events.
+## Proof model
 
-### Isolated private-beta workspaces
+Basalt verification combines:
 
-Each job receives a bounded disposable workspace. The runtime:
+- configured install/build/lint/typecheck/test checks;
+- security and policy scanning;
+- mutation testing;
+- AST-backed repository graph evidence;
+- risk and human-approval gates;
+- generated machine-readable and human-readable evidence.
 
-- rejects symlinks
-- excludes Git history, virtual environments, dependencies, caches, and Basalt state
-- enforces file and byte ceilings
-- copies only allowlisted environment values
-- records a source-state hash
-- verifies that the registered repository was not changed by isolated verification
-- records network policy as denied by default
+Unconfigured optional checks are reported as `NOT_APPLICABLE` rather than failures. Proof summaries count only applicable checks in the passed denominator and show skipped checks separately.
 
-The current beta uses local workspace copies and the existing temp/Docker proof sandboxes. Warm copy-on-write pools and microVMs remain later infrastructure work.
-
-### Secret-safe provider integrations
-
-Basalt now has a persistent provider inventory and a minimal OpenAI-compatible adapter.
-
-Built-in local profiles remain available for deterministic planning and template code generation. A remote compatible provider is enabled only when these variables are deliberately configured:
+The RC4 repository self-verifies as:
 
 ```text
-BASALT_OPENAI_BASE_URL
-BASALT_OPENAI_MODEL
-BASALT_OPENAI_API_KEY
+VERIFIED
+98/100
+2/2 applicable checks passed
+3 checks not applicable
+1 mutation killed
+0 high-severity findings
 ```
 
-Credentials are read at execution time. Provider snapshots expose only whether credentials are configured, never their values.
+## Governed change lifecycle
 
-### Broader private-beta product templates
+The protected agent-assisted workflow is:
 
-The factory now accepts:
+```text
+repository truth
+→ context compilation
+→ patch proposal
+→ policy decision
+→ human approval when required
+→ one-time approval token
+→ controlled apply
+→ post-change proof
+→ committed transaction
+→ evidence linkage
+→ append-only rollback when requested
+```
 
-- `python-service`
-- `api-service`
-- `fullstack-lite`
-- `web-app`
-- `saas-starter`
+Patch scope and calculated impact radius are displayed separately. Affected files, tests, and features are never presented as though they were directly edited.
 
-`saas-starter` adds a dependency-free multi-tenant foundation with tenant isolation, role checks, subscription gates, tests, documentation, and embedded Basalt proof evidence. These are still governed starter systems, not arbitrary production applications.
+## Factory execution truth
 
-### Verified deployment control plane
+RC4 does not label template materialization as remote autonomous agent execution. Factory records use `DETERMINISTIC_LOCAL`, respect declared dependencies in topological order, use non-contradictory timestamps, and identify the artifacts produced by each specialist contract.
 
-Basalt can package a product only when its proof report is `VERIFIED` with an acceptable score. It creates an immutable `.tar.gz` artifact with a SHA-256 digest and records it in a deployment ledger.
+Factory state rollback is exposed as an append-only state transition. Previous committed versions remain queryable; rollback does not rewrite ledger history.
 
-Supported control-plane environments:
+## Architecture and preview
 
-- preview — may promote immediately after proof
-- staging — requires explicit approval
-- production — requires explicit approval
+Architecture views are derived from repository source and the AST-backed Knowledge Graph. They are not manually drawn or model-invented diagrams.
 
-Promotion, artifact integrity checks, restore, and rollback records are implemented. Phase 6 does **not** claim live cloud-provider deployment; it establishes the private-beta release boundary that Phase 7 will connect to production infrastructure.
+Preview is deliberately bounded:
 
-### Official Basalt brand integration
+- static assets only;
+- same-origin serving;
+- no arbitrary project commands;
+- no server-side project execution;
+- protected-path enforcement;
+- file-type and size limits;
+- explicit start and stop lifecycle.
 
-The Command Center now uses the official Basalt wordmark supplied by the founder:
+Projects requiring a backend runtime must use a configured governed runtime or external deployment connector; RC4 does not silently execute them.
 
-- soft off-white wordmark on obsidian in dark mode
-- near-black wordmark on a soft light surface
-- preserved logo geometry through a reusable mask
-- compact mark variants for app surfaces
-- no lime, emoji UI, cartoon agents, neon effects, or external UI assets
+## Local control plane
 
-The Basalt Obsidian design audit now validates both design tokens and required brand assets.
+Preserved Phase 6 foundations include:
 
-### Private Beta Command Center
+- persistent local users, teams, memberships, and projects;
+- owner/admin/developer/reviewer/viewer roles;
+- durable SQLite jobs with idempotency, leases, heartbeats, retries, cancellation, and lifecycle events;
+- bounded isolated job workspaces;
+- secret-safe provider inventory;
+- proof-gated deployment packages, approvals, promotion, restore, and rollback records.
 
-The Command Center adds a dedicated private-beta control surface for:
-
-- persistent projects
-- durable jobs
-- configured model providers
-- deployment artifacts and status
-- factory runs and proof-backed assembly
-- existing proof, knowledge, transactions, approvals, and evidence
-
-The existing security boundary remains: localhost by default, read-only by default, per-launch action token, same-origin validation, Host-header validation, restrictive CSP, and approved artifact access.
+The Operations surface reports only observed local proof, graph, job, deployment, preview, approval, and rollback state. It does not claim external uptime monitoring.
 
 ## Quick start
 
-Install locally:
-
 ```bash
+cd /path/to/basalt-mvp-v1.5-full
+python3.14 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
 python -m pip install -e .
-```
-
-Bootstrap a private-beta workspace:
-
-```bash
-basalt beta bootstrap . \
-  --email founder@example.com \
-  --name "Basalt Founder" \
-  --team "Basalt Private Beta"
-```
-
-Register a project:
-
-```bash
-basalt beta project-add . \
-  --team-id TEAM_ID \
-  --created-by USER_ID \
-  --name "Core Product" \
-  --project-repo /path/to/repository \
-  --template saas-starter
-```
-
-Submit and process durable work:
-
-```bash
-basalt beta job-submit . \
-  --project-id PROJECT_ID \
-  --created-by USER_ID \
-  --type VERIFY_PROJECT
-
-basalt beta job-run . JOB_ID
-basalt beta jobs .
-```
-
-Inspect providers and deployments:
-
-```bash
-basalt beta providers .
-basalt beta deployments .
-```
-
-Launch the Command Center:
-
-```bash
-basalt command-center .
-```
-
-Enable governed actions deliberately:
-
-```bash
+python -m unittest discover -s tests -p 'test_*.py'
+basalt verify . --sandbox temp
 basalt command-center . --allow-actions
 ```
 
-Create a verified SaaS starter directly through the factory:
-
-```bash
-basalt factory create . \
-  --prompt "Build a multi-tenant operations platform with roles, subscriptions, an API, and a dashboard." \
-  --name "Obsidian Ops" \
-  --template saas-starter \
-  --privacy local \
-  --sandbox temp \
-  --target ../obsidian-ops
-```
-
-## Existing platform capabilities retained
-
-Phase 6 preserves every completed lower layer:
-
-- proof verdicts and scoring
-- temp and Docker sandbox execution
-- mutation testing and weak-proof detection
-- security, secrets, dependency, workflow, auth, SQL, and quality checks
-- GitHub Actions proof gates and evidence artifacts
-- AST-anchored Project Knowledge Graph
-- graph freshness, feature/test mapping, and impact analysis
-- task-specific Context Compiler
-- governed agent patch transactions
-- Policy Kernel and role capabilities
-- human approvals and automatic rollback
-- Product Brain and prevention-first engineering
-- deterministic State Coordinator
-- dependency-safe Epoch Planner and Patch Aggregator
-- provider-neutral Model Router
-- specialist-agent task orchestration
-- VERIFIED-only factory assembly
-- Basalt Obsidian Command Center
-
-## Private Beta API
-
-Read-only state:
+Open:
 
 ```text
-GET /api/v1/beta
-GET /api/v1/beta/projects
-GET /api/v1/beta/jobs
-GET /api/v1/beta/jobs/<job-id>
-GET /api/v1/beta/providers
-GET /api/v1/beta/deployments
-GET /api/v1/beta/deployments/<deployment-id>
+Command Center: http://127.0.0.1:7337/
+Build Workspace: http://127.0.0.1:7337/workspace
 ```
 
-Governed actions require `--allow-actions` and the per-launch token:
+The launch output includes a per-process action token. Do not share that token.
+
+## Main CLI
 
 ```text
-POST /api/v1/beta/bootstrap
-POST /api/v1/beta/projects
-POST /api/v1/beta/jobs
-POST /api/v1/beta/jobs/<job-id>/run
-POST /api/v1/beta/jobs/<job-id>/cancel
-POST /api/v1/beta/jobs/<job-id>/retry
-POST /api/v1/beta/deployments/<deployment-id>/approve
-POST /api/v1/beta/deployments/<deployment-id>/promote
-POST /api/v1/beta/deployments/<deployment-id>/rollback
+basalt verify <repo>
+basalt inspect <repo>
+basalt graph build|status|query <repo>
+basalt impact <repo> <target>
+basalt context <repo> <task>
+basalt agent plan|status|approve|reject|apply|rollback
+basalt factory plan|build|create|status|models|design-system
+basalt beta bootstrap|status|project|job|provider|deployment
+basalt command-center <repo> --allow-actions
 ```
 
-## Evidence and storage
+Run `basalt <command> --help` for exact arguments.
 
-Private-beta state is stored under `.basalt/private-beta/` by default:
+## Evidence locations
 
-- workspace and RBAC database
-- durable job database and events
-- isolated workspace manifests
-- provider configuration references
-- factory and job artifacts
-- deployment ledger
-- immutable deployment packages
-- private-beta snapshots
+Repository evidence defaults to `.basalt/`:
 
-Project and proof evidence remain under `.basalt/` and generated product targets.
+- proof reports and score breakdown;
+- graph, impact, and context artifacts;
+- agent proposals, policy decisions, approvals, transactions, proof deltas, backups, and rollback records;
+- factory blueprints, plans, task graphs, manifests, proof, state transactions, and rollback evidence;
+- architecture and operations snapshots;
+- workspace activity evidence;
+- private control-plane databases and deployment packages.
 
-## Current maturity and honest boundaries
+The Evidence Vault reports origin, schema, creation and modification time, SHA-256, group, and honest mutability state. Local evidence is hash-tracked but is not falsely described as immutable storage.
 
-Basalt v2.5 is a **private-beta full build system**, not yet the production Basalt v1 release.
+## Security invariants
 
-Implemented now:
+- loopback binding is enforced by default;
+- non-loopback binding requires explicit unsafe mode;
+- same-origin, host, and action-token checks protect browser mutations;
+- one-time approval tokens are stored only as hashes;
+- protected paths include `.git`, `.basalt`, environments, dependencies, caches, and generated internals;
+- symlinks and path traversal fail closed in bounded workspaces;
+- dangerous commands are rejected;
+- only configured or safely inferred commands can execute;
+- source writes use optimistic hashes and atomic replacement;
+- rollback creates new ledger evidence rather than erasing history.
 
-- persistent local teams and projects
-- durable job semantics
-- isolated job workspaces
-- optional real OpenAI-compatible model calls
-- broader governed starter generation
-- verified release artifacts and approval gates
-- private-beta Command Center experience
+## Honest production boundary
 
-Not yet claimed:
+RC4 completes the Phase 7 **local product source candidate** and production-control foundations. The following require real external infrastructure and credentials before they can be claimed as production-validated:
 
-- hosted multi-tenant cloud accounts
-- production identity provider and billing
-- Redis/Temporal distributed workers
-- remote secret vault
-- warm snapshot pools or microVM isolation
-- real AWS/GCP/Azure/Vercel deployment connectors
-- production monitoring and incident response
-- enterprise compliance certification
+- hosted multi-tenant identity and billing;
+- managed distributed workers and remote hardened sandboxes;
+- production secret vault integration;
+- provider-specific AWS, GCP, Azure, Vercel, or similar deployment execution;
+- external uptime, telemetry, alerting, and incident paging;
+- enterprise SSO and compliance certification.
 
-Those are Phase 7 production responsibilities and Phase 8 final-vision work.
+Basalt exposes truthful local foundations and governed integration boundaries for these systems; it does not simulate them as live production services.
+
+## Validation status
+
+RC4 validation performed in the delivery environment:
+
+- Python compilation: PASS;
+- JavaScript syntax: PASS;
+- full automated suite: **224 tests PASS**;
+- critical proof matrix: **103 tests PASS**;
+- self-verification: **VERIFIED 98/100**;
+- HTTP/API authorization and lifecycle contracts: PASS;
+- Docker verification: not run because Docker is unavailable in the delivery environment;
+- final browser revalidation on the project Mac: required before publishing the GitHub prerelease.
+
+See:
+
+- `docs/PHASE7_MASTER_SPEC.md`
+- `docs/PHASE7_VALIDATION_REPORT.md`
+- `docs/RELEASE_NOTES_V3_RC4.md`
+- `docs/RC4_IMPLEMENTATION_SPEC.md`
 
 ## Roadmap
 
@@ -283,16 +234,10 @@ Phase 3 — Agent-Assisted Safe Fixes               COMPLETE
 Phase 4 — Command Center Web App                  COMPLETE
 Phase 5 — Alpha AI Software Factory               COMPLETE
 Phase 6 — Private Beta Full Build System          COMPLETE
-Phase 7 — Production Basalt v1                    ACTIVE (v3.0.0-rc.3)
+Phase 7 — Production Basalt v1                    RC4 SOURCE CANDIDATE COMPLETE; RELEASE ACCEPTANCE ACTIVE
 Phase 8 — Full Basalt Final Vision                UPCOMING
 ```
 
 ## License
 
 Basalt is proprietary software. See `LICENSE`.
-
-## Basalt Build Workspace — Phase 7
-
-Basalt v3.0.0-rc.3 advances the daily-use Build Workspace with multi-file tabs, line numbers, local syntax highlighting, live diagnostics, governed diff review before atomic saves, stale-conflict handling, contextual repository search, Git visibility, resizable panes, a command palette, and integrated Build, Proof, Activity, and Git panels. Arbitrary shell execution and protected-directory editing remain deliberately disabled.
-
-See `docs/PHASE7_MASTER_SPEC.md` for the production contract and honest infrastructure boundary.

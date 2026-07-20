@@ -1,0 +1,74 @@
+{
+  "api_contracts": {
+    "coverage": [
+      "authorization",
+      "architecture",
+      "preview lifecycle",
+      "operations",
+      "evidence",
+      "workspace Git diff"
+    ],
+    "status": "PASS"
+  },
+  "browser_visual": {
+    "reason": "Chromium navigation is blocked by administrator policy with ERR_BLOCKED_BY_ADMINISTRATOR for localhost, file, data, and public URLs.",
+    "required_next": "Run final visual/browser acceptance once on the project Mac before publishing the GitHub prerelease.",
+    "status": "ENVIRONMENT_BLOCKED"
+  },
+  "critical_proof_matrix": {
+    "command": "python3 tests/run_proof_matrix.py",
+    "duration_seconds": 10.413,
+    "status": "PASS",
+    "tests": 103
+  },
+  "docker": {
+    "reason": "Docker command unavailable in delivery environment.",
+    "status": "NOT_RUN"
+  },
+  "full_test_suite": {
+    "command": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "duration_seconds": 99.462,
+    "status": "PASS",
+    "tests": 224
+  },
+  "generated_at": "2026-07-20T11:18:31.820775+00:00",
+  "javascript_syntax": {
+    "command_center": {
+      "command": "node --check basalt_proof/webui/app.js",
+      "status": "PASS"
+    },
+    "workspace": {
+      "command": "node --check basalt_proof/webui/workspace.js",
+      "status": "PASS"
+    }
+  },
+  "python_compileall": {
+    "command": "python3 -m compileall -q basalt_proof tests",
+    "status": "PASS"
+  },
+  "rc4_regression_suite": {
+    "command": "python3 -m unittest tests.test_phase7_rc4_hardening",
+    "status": "PASS",
+    "tests": 14
+  },
+  "release": "3.0.0rc4",
+  "self_verification": {
+    "checks": {
+      "fail": 0,
+      "not_applicable": 3,
+      "pass": 2
+    },
+    "findings": {
+      "high": 0,
+      "medium": 0
+    },
+    "mutations": {
+      "killed": 1,
+      "survived": 0
+    },
+    "sandbox": "temp",
+    "score": 98,
+    "status": "VERIFIED",
+    "version": "3.0.0rc4"
+  }
+}

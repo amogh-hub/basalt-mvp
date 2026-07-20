@@ -188,7 +188,7 @@ class CommandCenterServerTests(unittest.TestCase):
                 self.assertEqual(headers["X-Frame-Options"], "DENY")
                 status, headers, page = request(server, "GET", "/")
                 self.assertEqual(status, 200)
-                self.assertIn("Basalt Private Beta", page)
+                self.assertIn("Basalt v3 Production Candidate", page)
                 self.assertIn("default-src 'self'", headers["Content-Security-Policy"])
 
     def test_bootstrap_never_enables_actions_by_default(self):

@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+from .release import VERSION
+
 
 class CheckStatus(str, Enum):
     PASS = "PASS"
@@ -388,7 +390,7 @@ class ProofReport:
     evidence_dir: str | None = None
     dashboard_path: str | None = None
     patch_plan_path: str | None = None
-    basalt_version: str = "3.0.0rc3"
+    basalt_version: str = VERSION
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

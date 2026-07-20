@@ -1,5 +1,5 @@
 project:
-  name: basalt-v2.5-private-beta
+  name: basalt-v3-production-candidate
   type: python
 commands:
   install: null

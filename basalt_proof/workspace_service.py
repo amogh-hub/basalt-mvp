@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .release import PHASE, WORKSPACE_NAME
 from .config import infer_commands, infer_project_type, load_config
 
 MAX_TEXT_BYTES = 1_000_000
@@ -108,9 +109,9 @@ class BuildWorkspaceService:
             spec = getattr(config, name, None)
             commands[name] = getattr(spec, 'command', None) or inferred.get(name)
         return {
-            'product': 'Basalt v3 Production Workspace',
+            'product': WORKSPACE_NAME,
             'version': __version__,
-            'phase': 7,
+            'phase': PHASE,
             'repo': str(self.repo),
             'name': config.project_name or self.repo.name,
             'project_type': project_type,
@@ -130,7 +131,8 @@ class BuildWorkspaceService:
                 'git_visibility': True,
                 'command_palette': True,
                 'resizable_layout': True,
-                'live_preview': False,
+                'static_preview': True,
+                'live_preview': True,
                 'arbitrary_shell': False,
             },
         }
@@ -351,30 +353,34 @@ class BuildWorkspaceService:
                 continue
         return {'query': term, 'count': len(results), 'items': results}
 
-    def git_status(self) -> dict[str, Any]:
-        def run(*args: str) -> subprocess.CompletedProcess[str]:
-            return subprocess.run(
-                ['git', *args],
-                cwd=self.repo,
-                text=True,
-                capture_output=True,
-                timeout=10,
-                env={k: v for k, v in os.environ.items() if k in {'PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL'}},
-            )
+    def _git_run(self, *args: str, timeout: int = 10) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ['git', *args],
+            cwd=self.repo,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            env={k: v for k, v in os.environ.items() if k in {'PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL'}},
+        )
 
+    def git_status(self) -> dict[str, Any]:
         try:
-            root = run('rev-parse', '--show-toplevel')
+            root = self._git_run('rev-parse', '--show-toplevel')
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return {'available': False, 'reason': 'Git is not available in this environment.', 'items': []}
         if root.returncode != 0:
             return {'available': False, 'reason': 'This workspace is not inside a Git repository.', 'items': []}
 
-        branch_result = run('branch', '--show-current')
-        commit_result = run('rev-parse', '--short=12', 'HEAD')
-        status_result = run('status', '--porcelain=v1', '--branch')
+        branch_result = self._git_run('branch', '--show-current')
+        commit_result = self._git_run('rev-parse', '--short=12', 'HEAD')
+        status_result = self._git_run('status', '--porcelain=v1', '--branch')
+        upstream_result = self._git_run('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}')
+        log_result = self._git_run('log', '-10', '--date=iso-strict', '--pretty=format:%h%x09%ad%x09%an%x09%s')
+        remote_result = self._git_run('remote')
         branch = branch_result.stdout.strip() or 'detached'
         commit = commit_result.stdout.strip() if commit_result.returncode == 0 else ''
-        items: list[dict[str, str]] = []
+        upstream = upstream_result.stdout.strip() if upstream_result.returncode == 0 else ''
+        items: list[dict[str, Any]] = []
         ahead = behind = 0
         for index, line in enumerate(status_result.stdout.splitlines()):
             if index == 0 and line.startswith('##'):
@@ -385,16 +391,79 @@ class BuildWorkspaceService:
                 continue
             if len(line) < 3:
                 continue
-            items.append({'status': line[:2], 'path': line[3:].strip()})
+            status = line[:2]
+            raw_path = line[3:].strip()
+            path = raw_path.split(' -> ', 1)[-1]
+            staged = status[0] not in {' ', '?'}
+            unstaged = status[1] not in {' ', '?'}
+            untracked = status == '??'
+            conflict = any(code in status for code in {'U', 'AA', 'DD'})
+            items.append({
+                'status': status,
+                'path': path,
+                'old_path': raw_path.split(' -> ', 1)[0] if ' -> ' in raw_path else '',
+                'staged': staged,
+                'unstaged': unstaged,
+                'untracked': untracked,
+                'conflict': conflict,
+            })
+        commits = []
+        for line in log_result.stdout.splitlines():
+            parts = line.split('\t', 3)
+            if len(parts) == 4:
+                commits.append({'commit': parts[0], 'created_at': parts[1], 'author': parts[2], 'subject': parts[3]})
         return {
             'available': True,
             'root': root.stdout.strip(),
             'branch': branch,
             'commit': commit,
+            'upstream': upstream,
+            'remotes': sorted(item for item in remote_result.stdout.splitlines() if item.strip()),
             'dirty': bool(items),
             'ahead': ahead,
             'behind': behind,
+            'summary': {
+                'staged': sum(1 for item in items if item['staged']),
+                'unstaged': sum(1 for item in items if item['unstaged']),
+                'untracked': sum(1 for item in items if item['untracked']),
+                'conflicts': sum(1 for item in items if item['conflict']),
+            },
             'items': items[:250],
+            'commits': commits,
+            'capabilities': {'status': True, 'diff': True, 'commit': False, 'push': False, 'branch_mutation': False},
+        }
+
+    def git_diff(self, path: str = '', staged: bool = False) -> dict[str, Any]:
+        status = self.git_status()
+        if not status.get('available'):
+            raise WorkspaceError(str(status.get('reason') or 'Git is unavailable.'))
+        relative = path.strip().replace('\\', '/')
+        if relative:
+            self._resolve(relative, must_exist=False)
+        args = ['diff', '--no-ext-diff', '--no-color', '--unified=3']
+        if staged:
+            args.append('--cached')
+        if relative:
+            args.extend(['--', relative])
+        try:
+            result = self._git_run(*args, timeout=15)
+        except subprocess.TimeoutExpired as exc:
+            raise WorkspaceError('Git diff timed out.') from exc
+        if result.returncode != 0:
+            raise WorkspaceError(result.stderr.strip() or 'Git diff failed.')
+        diff = result.stdout
+        item = next((entry for entry in status.get('items', []) if entry.get('path') == relative), None)
+        if relative and item and item.get('untracked') and not diff:
+            target = self._resolve(relative)
+            if target.is_file() and _is_text_file(target) and target.stat().st_size <= MAX_TEXT_BYTES:
+                content = target.read_text(encoding='utf-8')
+                diff = ''.join(difflib.unified_diff([], content.splitlines(keepends=True), fromfile='/dev/null', tofile=f'b/{relative}'))
+        return {
+            'path': relative,
+            'staged': bool(staged),
+            'diff': diff or 'No diff for this selection.\n',
+            'truncated': len(diff) > 200_000,
+            'capabilities': status.get('capabilities', {}),
         }
 
     def run_command(self, name: str, timeout_seconds: int = 300) -> dict[str, Any]:

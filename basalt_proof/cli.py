@@ -7,6 +7,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from .release import PRODUCT_NAME, VERSION
+
 from . import __version__
 from .agent_runtime import (
     AgentRunError,
@@ -54,9 +56,6 @@ from .software_factory import (
     load_factory_run,
     plan_factory_run,
 )
-
-
-PRODUCT_NAME = "Basalt v3.0 Production Candidate"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -865,7 +864,7 @@ def run_agent(args: argparse.Namespace) -> int:
 
 
 def _print_factory_run(run) -> None:
-    print("Basalt Private Beta Full Build System")
+    print(f"{PRODUCT_NAME} · {VERSION}")
     print(f"- run: {run.run_id}")
     print(f"- product: {run.product_name}")
     print(f"- template: {run.template}")
@@ -1000,11 +999,11 @@ def run_beta(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(result, indent=2))
         else:
-            print("Basalt Private Beta")
+            print(PRODUCT_NAME)
             print(json.dumps(result, indent=2))
         return 0
     except (PrivateBetaError, OSError, ValueError, JobQueueError) as exc:
-        print(f"Basalt private beta error: {exc}", file=sys.stderr)
+        print(f"Basalt control plane error: {exc}", file=sys.stderr)
         return 1
 
 
@@ -1020,7 +1019,7 @@ def run_command_center(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(snapshot, indent=2))
         else:
-            print("Basalt v3.0 Production Candidate Snapshot")
+            print(f"{PRODUCT_NAME} Snapshot")
             print(f"- project: {snapshot['project']['name']}")
             print(f"- verdict: {snapshot['truth']['status']}")
             print(f"- proof score: {snapshot['truth']['score']}/100")

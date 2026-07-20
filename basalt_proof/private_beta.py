@@ -10,6 +10,7 @@ from .deployment_manager import DeploymentManager
 from .job_queue import DurableJobQueue, JobQueueError
 from .proof import verify_repo
 from .provider_registry import ProviderRegistry
+from .release import VERSION
 from .software_factory import create_product, plan_factory_run
 from .workspace_registry import WorkspaceRegistry
 from .workspace_runtime import PRIVATE_BETA_PROFILE, WorkspaceManager
@@ -222,7 +223,7 @@ class PrivateBetaPlatform:
         providers = self.providers.snapshot()
         deployments = self.deployments.snapshot()
         return {
-            "version": "3.0.0rc3",
+            "version": VERSION,
             "root": str(self.root),
             "workspace": workspace,
             "jobs": jobs,

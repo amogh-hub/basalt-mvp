@@ -1,51 +1,73 @@
-# Phase 7 Validation Report — v3.0.0-rc.3
+# Phase 7 Validation Report — Basalt 3.0.0rc4
 
-## Delivered
+## Validation result
 
-- multi-file tabbed Build Workspace
-- contextual explorer and repository search
-- line numbers, local syntax highlighting and cursor metadata
-- live bounded diagnostics
-- governed diff-before-save workflow
-- stale conflict visibility and repository reload
-- resizable contained workspace layout
-- Build, Proof, Activity and Git engineering panels
-- command palette and keyboard shortcuts
-- read-only Git state API
-- protected diff and diagnostics APIs
+RC4 is a passing local source candidate with one environment-dependent release gate remaining: final browser revalidation on the project Mac. Docker verification is conditional on Docker availability.
 
-## Automated validation in the delivery container
+## Automated test results
 
-- Python compilation: **PASS**
-- workspace JavaScript syntax (`node --check`): **PASS**
-- Phase 7 workspace suite: **19 tests PASS**
-- Phase 1 alpha platform: **18 tests PASS**
-- Phase 1 self-verification: **12 tests PASS**
-- Phase 2 knowledge/context: **22 tests PASS**
-- Phase 4 Command Center: **20 tests PASS**
-- Phase 5 software factory: **37 tests PASS**
-- Phase 6 private beta: **57 tests PASS**
-- total completed non-Phase-3 validation: **185 tests PASS**
+| Gate | Result |
+|---|---:|
+| Python compilation | PASS |
+| Command Center JavaScript syntax | PASS |
+| Build Workspace JavaScript syntax | PASS |
+| Full automated suite | **224 PASS** |
+| RC4 hardening regression tests | **14 PASS** |
+| Critical proof matrix | **103 PASS** |
+| Temp-sandbox self-verification | **VERIFIED 98/100** |
+| High-severity self-scan findings | **0** |
+| Mutation sample | **1 killed, 0 survived** |
+| HTTP/API authorization and lifecycle contracts | PASS |
 
-## Full-suite gate
+Full-suite execution completed in 99.462 seconds in the delivery environment.
 
-RC3 contains seven new tests beyond the accepted RC2 baseline, so the expected complete repository result is **210 tests**. The proof-heavy Phase 3 suite exceeds the delivery-container execution window, as it did during earlier release-candidate packaging. Phase 3 source was not changed by RC3. The complete 210-test suite must be rerun on the project Mac before RC3 is accepted or merged.
+## RC4 correction coverage
 
-## Browser acceptance required
+- RC4-01 release identity and active branding: PASS
+- RC4-02 proof applicable/skipped summary: PASS
+- RC4-03 generated-output/lint containment: PASS
+- RC4-04 workspace refresh continuity implementation and regression contract: PASS
+- RC4-05 exact diagnostic column navigation: PASS
+- RC4-06 command availability consistency: PASS
+- RC4-07 approval decision context: PASS
+- RC4-08 patch scope versus impact terminology: PASS
+- RC4-09 transaction list/detail synchronization: PASS
+- RC4-10 provenance and rollback UX: PASS
+- RC4-11 Evidence Vault depth and content addressing: PASS
+- RC4-12 deterministic agent-execution truth: PASS
+- RC4-13 Git read-only browser workflow foundation: PASS
 
-Automated service and static UI contracts pass, but final acceptance must be performed in the real browser on the project Mac for:
+## Additional Phase 7 source gates
 
-- opening and closing multiple tabs
-- unsaved markers and tab switching
-- line-number and syntax-layer scroll synchronization
-- live diagnostics navigation
-- diff review and atomic save
-- stale-write conflict reload
-- contextual search and command palette
-- resizable pane persistence
-- Build Control containment
-- Proof, Activity and Git panel rendering
+- architecture/API/database/dependency canvas: PASS
+- safe static preview lifecycle: PASS
+- local identity/organization/project/job/provider/deployment surface: PASS
+- local operations, incidents, and recovery surface: PASS
+- append-only factory rollback: PASS
+- accessibility foundations: PASS
+
+## Self-verification evidence
+
+```text
+Final Status: VERIFIED
+Proof Score: 98/100
+Sandbox: temp
+Checks: lint PASS, test PASS, install/build/typecheck NOT_APPLICABLE
+Mutation: python_ast_compare_flip KILLED
+High findings: 0
+Basalt version: 3.0.0rc4
+```
+
+## Browser validation note
+
+Service-level APIs, authorization, static UI contracts, lifecycle endpoints, Git APIs, preview serving, and browser-facing regression contracts pass. The delivery container includes Chromium, but administrator policy blocks all Chromium navigation with `ERR_BLOCKED_BY_ADMINISTRATOR`, including localhost, file, and data URLs. Therefore a truthful visual/browser execution result cannot be claimed from this environment.
+
+The accepted RC3 browser workflow already proved the underlying tabs, editing, save, stale conflict, search, console, Proof, Activity, and large-file scroll flows. RC4 changed those flows and must be visually revalidated once on the project Mac before publishing.
+
+## Docker validation note
+
+The Docker command is not installed in the delivery environment. Docker verification was not run and is not reported as passing. Temp-sandbox verification passed.
 
 ## Release status
 
-`3.0.0rc3` is a **release candidate**. It is not Production Basalt v1 GA and does not claim superiority over mature competitors until the remaining Phase 7 gates are implemented and measured.
+`3.0.0rc4` is ready for project-Mac installation and final browser acceptance. It is not yet a published GitHub prerelease and is not Production Basalt v1 GA.

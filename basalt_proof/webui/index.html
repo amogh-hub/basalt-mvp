@@ -4,15 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Basalt Private Beta</title>
+  <title>Basalt v3 Production Candidate</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <div id="status-live" class="status-live" aria-live="polite"></div>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Primary navigation">
-      <a class="brand" href="#overview" aria-label="Basalt Private Beta home">
+      <a class="brand" href="#overview" aria-label="Basalt v3 Production Candidate home">
         <span class="brand-wordmark" aria-hidden="true"></span>
-        <small>PRIVATE BETA</small>
+        <small>RELEASE CANDIDATE</small>
       </a>
       <nav id="main-nav">
         <a class="nav-item active" href="#overview" data-section="overview"><span>01</span>Overview</a>
@@ -20,11 +22,14 @@
         <a class="nav-item" href="#plan" data-section="plan"><span>03</span>Plan</a>
         <a class="nav-item" href="#agents" data-section="agents"><span>04</span>Agents</a>
         <a class="nav-item" href="#proof" data-section="proof"><span>05</span>Proof</a>
-        <a class="nav-item" href="#graph" data-section="graph"><span>06</span>Knowledge</a>
-        <a class="nav-item" href="#transactions" data-section="transactions"><span>07</span>Transactions</a>
-        <a class="nav-item" href="#approvals" data-section="approvals"><span>08</span>Approvals</a>
-        <a class="nav-item" href="#beta" data-section="beta"><span>09</span>Private Beta</a>
-        <a class="nav-item" href="#evidence" data-section="evidence"><span>10</span>Evidence</a>
+        <a class="nav-item" href="#architecture" data-section="architecture"><span>06</span>Architecture</a>
+        <a class="nav-item" href="#graph" data-section="graph"><span>07</span>Knowledge</a>
+        <a class="nav-item" href="#preview" data-section="preview"><span>08</span>Preview</a>
+        <a class="nav-item" href="#transactions" data-section="transactions"><span>09</span>Transactions</a>
+        <a class="nav-item" href="#approvals" data-section="approvals"><span>10</span>Approvals</a>
+        <a class="nav-item" href="#beta" data-section="beta"><span>11</span>Control Plane</a>
+        <a class="nav-item" href="#operations" data-section="operations"><span>12</span>Operations</a>
+        <a class="nav-item" href="#evidence" data-section="evidence"><span>13</span>Evidence</a>
       </nav>
       <div class="sidebar-footer">
         <div class="mode-indicator"><span id="mode-dot"></span><span id="mode-label">Read-only</span></div>
@@ -32,7 +37,7 @@
       </div>
     </aside>
 
-    <main class="main-area">
+    <main id="main-content" class="main-area" tabindex="-1">
       <header class="topbar">
         <div>
           <p class="eyebrow">LOCAL REPOSITORY TRUTH</p>
@@ -76,7 +81,7 @@
 
         <div class="two-column">
           <article class="panel">
-            <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h3>Roadmap state</h3></div><span class="panel-chip">Phase 6</span></div>
+            <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h3>Roadmap state</h3></div><span class="panel-chip">Phase 7</span></div>
             <div id="roadmap-list" class="roadmap-list"></div>
           </article>
           <article class="panel">
@@ -88,7 +93,7 @@
 
 
       <section id="factory" class="view" aria-labelledby="factory-title">
-        <div class="section-heading"><div><p class="eyebrow">PRODUCT BRAIN</p><h2 id="factory-title">Create a proof-backed product</h2><p class="muted">Intent becomes locked requirements, dependency-safe epochs, governed agent work, and verified assembly.</p></div><span class="panel-chip">Alpha factory</span></div>
+        <div class="section-heading"><div><p class="eyebrow">PRODUCT BRAIN</p><h2 id="factory-title">Create a proof-backed product</h2><p class="muted">Intent becomes locked requirements, dependency-safe epochs, governed agent work, and verified assembly.</p></div><span class="panel-chip">Governed factory</span></div>
         <div class="metric-grid compact">
           <article class="metric-card"><p>Factory runs</p><strong id="factory-total">0</strong></article>
           <article class="metric-card"><p>Verified products</p><strong id="factory-verified">0</strong></article>
@@ -143,6 +148,10 @@ Local verification only"></textarea></label>
           <article class="metric-card"><p>Survived mutations</p><strong id="proof-survived">0</strong></article>
           <article class="metric-card"><p>High findings</p><strong id="proof-high">0</strong></article>
         </div>
+        <article id="proof-breakdown-panel" class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">SCORE EXPLANATION</p><h3>How this proof score was calculated</h3></div><span class="panel-chip">Evidence-based</span></div>
+          <div id="proof-breakdown" class="stack-list empty-state">No score breakdown loaded.</div>
+        </article>
         <article class="panel">
           <div class="panel-heading"><div><p class="eyebrow">CHECKS</p><h3>Proof execution</h3></div><span id="proof-finished" class="muted"></span></div>
           <div class="table-wrap"><table><thead><tr><th>Check</th><th>Status</th><th>Sandbox</th><th>Duration</th><th>Meaning</th></tr></thead><tbody id="checks-table"></tbody></table></div>
@@ -151,6 +160,22 @@ Local verification only"></textarea></label>
           <article class="panel"><div class="panel-heading"><div><p class="eyebrow">FINDINGS</p><h3>Risk evidence</h3></div></div><div id="findings-list" class="stack-list empty-state">No findings loaded.</div></article>
           <article class="panel"><div class="panel-heading"><div><p class="eyebrow">MUTATIONS</p><h3>Test strength</h3></div></div><div id="mutations-list" class="stack-list empty-state">No mutations loaded.</div></article>
         </div>
+      </section>
+
+      <section id="architecture" class="view" aria-labelledby="architecture-title">
+        <div class="section-heading"><div><p class="eyebrow">REPOSITORY-DERIVED DESIGN</p><h2 id="architecture-title">Architecture, API, and database canvases</h2><p class="muted">Every canvas is reconstructed from source and the AST-backed graph. Basalt does not invent missing components.</p></div><span id="architecture-freshness" class="panel-chip">Loading</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Source files</p><strong id="architecture-files">0</strong></article>
+          <article class="metric-card"><p>Modules</p><strong id="architecture-modules">0</strong></article>
+          <article class="metric-card"><p>Routes</p><strong id="architecture-routes">0</strong></article>
+          <article class="metric-card"><p>Schemas</p><strong id="architecture-schemas">0</strong></article>
+        </div>
+        <div id="architecture-layers" class="architecture-grid"></div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">API CANVAS</p><h3>Discovered endpoints and route signals</h3></div></div><div id="architecture-api" class="stack-list empty-state">No API routes detected.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">DATABASE CANVAS</p><h3>Persistent schemas and stores</h3></div></div><div id="architecture-database" class="stack-list empty-state">No database schema detected.</div></article>
+        </div>
+        <article class="panel"><div class="panel-heading"><div><p class="eyebrow">DEPENDENCY CANVAS</p><h3>Cross-module dependency signals</h3></div></div><div id="architecture-dependencies" class="table-wrap"></div></article>
       </section>
 
       <section id="graph" class="view" aria-labelledby="graph-title">
@@ -186,6 +211,20 @@ Local verification only"></textarea></label>
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">LANGUAGES</p><h3>Indexed source distribution</h3></div></div><div id="language-bars" class="bar-list"></div></article>
       </section>
 
+      <section id="preview" class="view" aria-labelledby="preview-title">
+        <div class="section-heading"><div><p class="eyebrow">SAFE LIVE PREVIEW</p><h2 id="preview-title">Application preview lifecycle</h2><p class="muted">Static previews are served same-origin without running arbitrary project commands or server-side code.</p></div><span id="preview-status" class="panel-chip">STOPPED</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Available</p><strong id="preview-available">No</strong></article>
+          <article class="metric-card"><p>Mode</p><strong id="preview-mode">Static</strong></article>
+          <article class="metric-card"><p>Root</p><strong id="preview-root">—</strong></article>
+          <article class="metric-card"><p>Arbitrary shell</p><strong>Disabled</strong></article>
+        </div>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">LIFECYCLE CONTROL</p><h3>Start, inspect, and stop</h3></div><div class="approval-actions"><button id="preview-start" class="button primary" type="button">Start preview</button><a id="preview-open" class="button secondary hidden" href="/preview/" target="_blank" rel="noopener">Open preview</a><button id="preview-stop" class="button secondary" type="button">Stop preview</button></div></div>
+          <div id="preview-detail" class="detail-grid"></div>
+        </article>
+      </section>
+
       <section id="transactions" class="view" aria-labelledby="transactions-title">
         <div class="section-heading"><div><p class="eyebrow">GOVERNED CHANGES</p><h2 id="transactions-title">State transaction ledger</h2></div><span id="transaction-count" class="panel-chip">0 total</span></div>
         <article class="panel"><div class="table-wrap"><table><thead><tr><th>Type</th><th>Run</th><th>Task</th><th>Status</th><th>Risk</th><th>Updated</th><th></th></tr></thead><tbody id="runs-table"></tbody></table></div></article>
@@ -198,7 +237,7 @@ Local verification only"></textarea></label>
       </section>
 
       <section id="beta" class="view" aria-labelledby="beta-title">
-        <div class="section-heading"><div><p class="eyebrow">PRIVATE BETA CONTROL PLANE</p><h2 id="beta-title">Projects, jobs, providers, and deployments</h2><p class="muted">Persistent teams and projects feed durable isolated jobs. Verified artifacts move through explicit deployment gates.</p></div><span class="panel-chip">Phase 6</span></div>
+        <div class="section-heading"><div><p class="eyebrow">LOCAL ORGANIZATION CONTROL PLANE</p><h2 id="beta-title">Identity, organizations, projects, jobs, providers, and deployments</h2><p class="muted">Persistent teams and projects feed durable isolated jobs. Verified artifacts move through explicit deployment gates.</p></div><span class="panel-chip">Local persistent foundation</span></div>
         <div class="metric-grid compact">
           <article class="metric-card"><p>Projects</p><strong id="beta-project-count">0</strong></article>
           <article class="metric-card"><p>Queued jobs</p><strong id="beta-job-count">0</strong></article>
@@ -206,12 +245,30 @@ Local verification only"></textarea></label>
           <article class="metric-card"><p>Deployments</p><strong id="beta-deployment-count">0</strong></article>
         </div>
         <div class="two-column">
-          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">WORKSPACE</p><h3>Persistent projects</h3></div></div><div id="beta-projects" class="stack-list empty-state">No private-beta projects registered.</div></article>
-          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">DURABLE EXECUTION</p><h3>Job queue</h3></div></div><div id="beta-jobs" class="stack-list empty-state">No private-beta jobs submitted.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">IDENTITY & ORGANIZATIONS</p><h3>Users, teams, memberships, and audit activity</h3></div></div><div id="beta-organizations" class="stack-list empty-state">No local organizations registered.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">WORKSPACE</p><h3>Persistent projects</h3></div></div><div id="beta-projects" class="stack-list empty-state">No projects registered.</div></article>
+        </div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">DURABLE EXECUTION</p><h3>Job queue</h3></div></div><div id="beta-jobs" class="stack-list empty-state">No jobs submitted.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">ISOLATED RUNTIME</p><h3>Workspace and worker truth</h3></div></div><div id="beta-runtime" class="stack-list empty-state">No active isolated workspaces.</div></article>
         </div>
         <div class="two-column">
           <article class="panel"><div class="panel-heading"><div><p class="eyebrow">MODEL PROVIDERS</p><h3>Secret-safe configuration</h3></div></div><div id="beta-providers" class="stack-list empty-state">No provider profiles loaded.</div></article>
           <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RELEASE CONTROL</p><h3>Deployment ledger</h3></div></div><div id="beta-deployments" class="stack-list empty-state">No deployment artifacts packaged.</div></article>
+        </div>
+      </section>
+
+      <section id="operations" class="view" aria-labelledby="operations-title">
+        <div class="section-heading"><div><p class="eyebrow">OPERATIONAL TRUTH</p><h2 id="operations-title">Monitoring, incidents, and recovery</h2><p class="muted">This surface reports local proof, graph, queue, deployment, preview, and rollback state. It does not claim external uptime monitoring.</p></div><span id="operations-status" class="panel-chip">Loading</span></div>
+        <div class="metric-grid compact">
+          <article class="metric-card"><p>Incidents</p><strong id="operations-incidents">0</strong></article>
+          <article class="metric-card"><p>High severity</p><strong id="operations-high">0</strong></article>
+          <article class="metric-card"><p>Pending approvals</p><strong id="operations-approvals">0</strong></article>
+          <article class="metric-card"><p>Rollback ready</p><strong id="operations-rollbacks">0</strong></article>
+        </div>
+        <div class="two-column">
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">INCIDENT LEDGER</p><h3>Detected operational conditions</h3></div></div><div id="operations-incident-list" class="stack-list empty-state">No incidents detected.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RECOVERY READINESS</p><h3>Available containment and rollback controls</h3></div></div><div id="operations-recovery" class="detail-grid"></div></article>
         </div>
       </section>
 

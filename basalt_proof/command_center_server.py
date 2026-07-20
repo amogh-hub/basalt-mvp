@@ -18,6 +18,8 @@ from .command_center import AgentRunError, CommandCenterService
 from .deployment_manager import DeploymentError
 from .job_queue import JobQueueError
 from .private_beta import PrivateBetaError
+from .preview import PreviewError
+from .release import API_SERVER_VERSION, PRODUCT_NAME, VERSION
 from .software_factory import FactoryError
 from .workspace_registry import WorkspaceError
 from .workspace_service import BuildWorkspaceService, WorkspaceError as BuildWorkspaceError
@@ -92,7 +94,7 @@ def create_command_center_server(
     workspace = BuildWorkspaceService(repo)
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "BasaltCommandCenter/3.0-rc3"
+        server_version = API_SERVER_VERSION
 
         def log_message(self, format: str, *args: object) -> None:
             return
@@ -205,6 +207,11 @@ def create_command_center_server(
                 if path == "/assets/workspace.js":
                     self._send(HTTPStatus.OK, _asset_text("workspace.js").encode("utf-8"), "application/javascript; charset=utf-8")
                     return
+                if path.startswith("/preview"):
+                    requested = path[len("/preview/"):] if path.startswith("/preview/") else ""
+                    asset, content_type = service.preview_manager().resolve(requested)
+                    self._send(HTTPStatus.OK, asset.read_bytes(), content_type)
+                    return
                 if path.startswith("/assets/brand/"):
                     name = path.rsplit("/", 1)[-1]
                     allowed = {
@@ -222,7 +229,7 @@ def create_command_center_server(
                 if path == "/api/v1/health":
                     self._send_json(
                         HTTPStatus.OK,
-                        {"status": "ok", "service": "Basalt Production Candidate", "api_version": "v1"},
+                        {"status": "ok", "service": PRODUCT_NAME, "version": VERSION, "api_version": "v1"},
                     )
                     return
                 if path == "/api/v1/bootstrap":
@@ -264,6 +271,25 @@ def create_command_center_server(
                     return
                 if path == "/api/v1/workspace/git":
                     self._send_json(HTTPStatus.OK, workspace.git_status())
+                    return
+                if path == "/api/v1/workspace/git/diff":
+                    query = parse_qs(parsed.query)
+                    self._send_json(
+                        HTTPStatus.OK,
+                        workspace.git_diff(
+                            str((query.get("path") or [""])[0]),
+                            str((query.get("staged") or ["false"])[0]).lower() in {"1", "true", "yes"},
+                        ),
+                    )
+                    return
+                if path == "/api/v1/architecture":
+                    self._send_json(HTTPStatus.OK, service.architecture())
+                    return
+                if path == "/api/v1/preview":
+                    self._send_json(HTTPStatus.OK, service.preview_state())
+                    return
+                if path == "/api/v1/operations":
+                    self._send_json(HTTPStatus.OK, service.operations())
                     return
                 if path == "/api/v1/artifacts":
                     self._send_json(HTTPStatus.OK, {"items": service.artifacts()})
@@ -399,6 +425,13 @@ def create_command_center_server(
                         return
                     self._send_json(HTTPStatus.OK, service.verify(data.get("sandbox")))
                     return
+                if parts in (["api", "v1", "preview", "start"], ["api", "v1", "preview", "stop"]):
+                    if not self._require_action_access():
+                        return
+                    actor = str(data.get("actor", "local-user"))
+                    result = service.preview_start(actor) if parts[-1] == "start" else service.preview_stop(actor)
+                    self._send_json(HTTPStatus.OK, result)
+                    return
                 if parts == ["api", "v1", "factory", "plan"]:
                     if not self._require_action_access():
                         return
@@ -416,10 +449,18 @@ def create_command_center_server(
                     )
                     self._send_json(HTTPStatus.OK, result)
                     return
-                if len(parts) == 6 and parts[:4] == ["api", "v1", "factory", "runs"] and parts[5] == "build":
+                if len(parts) == 6 and parts[:4] == ["api", "v1", "factory", "runs"]:
                     if not self._require_action_access():
                         return
-                    result = service.factory_build(parts[4], str(data.get("sandbox", "temp")))
+                    if parts[5] == "build":
+                        result = service.factory_build(parts[4], str(data.get("sandbox", "temp")))
+                    elif parts[5] == "rollback":
+                        result = service.factory_rollback(
+                            parts[4], str(data.get("actor", "")), str(data.get("reason", ""))
+                        )
+                    else:
+                        self._error(HTTPStatus.NOT_FOUND, "NOT_FOUND", "Unknown factory run action.")
+                        return
                     self._send_json(HTTPStatus.OK, result)
                     return
                 if parts == ["api", "v1", "beta", "bootstrap"]:
@@ -507,6 +548,7 @@ def create_command_center_server(
                 DeploymentError,
                 JobQueueError,
                 PrivateBetaError,
+                PreviewError,
                 FactoryError,
                 WorkspaceError,
                 BuildWorkspaceError,
@@ -545,7 +587,7 @@ def serve_command_center(
     actual_host, actual_port = server.server_address[:2]
     display_host = "127.0.0.1" if actual_host in {"0.0.0.0", "::"} else actual_host
     url = f"http://{display_host}:{actual_port}"
-    print("Basalt v2.5 Private Beta Full Build System")
+    print(f"{PRODUCT_NAME} · {VERSION}")
     print(f"- repository: {Path(repo).resolve()}")
     print(f"- URL: {url}")
     print(f"- actions: {'enabled' if allow_actions else 'read-only'}")

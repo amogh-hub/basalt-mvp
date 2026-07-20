@@ -1,1 +1,3 @@
-__version__ = "3.0.0rc3"
+from .release import VERSION as __version__
+
+__all__ = ["__version__"]

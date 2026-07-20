@@ -162,15 +162,31 @@ def _write_run(run: AgentRun, run_dir: Path) -> None:
         except json.JSONDecodeError:
             entries = []
     entries = [item for item in entries if item.get("run_id") != run.run_id]
+    patch_stats = run.policy_decision.patch_stats if run.policy_decision else None
     entries.append(
         {
             "run_id": run.run_id,
             "task": run.task,
             "agent_role": run.agent_role,
+            "role": run.agent_role,
             "status": run.status.value,
             "created_at": run.created_at,
             "updated_at": run.updated_at,
             "risk": run.policy_decision.risk_level if run.policy_decision else "UNKNOWN",
+            "base_state_hash": run.base_state_hash,
+            "current_state_hash": run.current_state_hash,
+            "patch_files": list(patch_stats.paths) if patch_stats else [],
+            "patch_file_count": patch_stats.files_changed if patch_stats else 0,
+            "changed_lines": patch_stats.changed_lines if patch_stats else 0,
+            "impact_file_count": len(run.impacted_files),
+            "impact_test_count": len(run.impacted_tests),
+            "impact_feature_count": len(run.impacted_features),
+            "policy_reasons": list(run.policy_decision.reasons) if run.policy_decision else [],
+            "required_approvals": list(run.policy_decision.required_approvals) if run.policy_decision else [],
+            "approval_required": bool(run.approval and run.approval.required),
+            "approval_actor": run.approval.actor if run.approval else "",
+            "rollback_available": run.status == AgentRunStatus.VERIFIED,
+            "message": run.message,
         }
     )
     entries.sort(key=lambda item: item.get("created_at", ""), reverse=True)
@@ -815,7 +831,16 @@ def apply_agent_run(
                     "human_approver": run.approval.actor if run.approval else "Policy Kernel",
                     "policy_verdict": run.policy_decision.verdict.value,
                     "proof_accepted": True,
+                    "proof_status": after_report.final_status.value,
+                    "proof_score": after_report.score,
+                    "before_proof": str(run.before_report_path),
+                    "after_proof": str(after_path),
+                    "verification_delta": str(run_dir / "verification-delta.json"),
+                    "patch_files": list(run.policy_decision.patch_stats.paths),
+                    "changed_lines": run.policy_decision.patch_stats.changed_lines,
+                    "committed_at": _now(),
                     "status": run.status.value,
+                    "rollback": {"eligible": True, "performed": False},
                 },
             )
     except Exception as exc:
@@ -870,6 +895,25 @@ def rollback_agent_run(
     run.agent_actions.append(
         _action("HumanApprover", "manual_rollback", "ROLLED_BACK", run.message, ["snapshot.restore", "graph.refresh"])
     )
+    transaction_path = run_dir / "state-transaction.json"
+    transaction = {}
+    if transaction_path.exists():
+        try:
+            transaction = json.loads(transaction_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            transaction = {}
+    transaction.update({
+        "run_id": run.run_id,
+        "base_state": run.base_state_hash,
+        "current_state": graph.state_hash,
+        "restored_state": graph.state_hash,
+        "status": run.status.value,
+        "rolled_back_by": actor,
+        "rollback_reason": reason,
+        "rolled_back_at": _now(),
+        "rollback": {"eligible": False, "performed": True, "restored_hash": graph.state_hash},
+    })
+    _write_json(transaction_path, transaction)
     _write_run(run, run_dir)
     return run
 

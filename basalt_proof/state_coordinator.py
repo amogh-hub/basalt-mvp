@@ -95,6 +95,13 @@ class StateCoordinator:
                 return ProjectState(0, "", "")
             return ProjectState(row["version"], row["state_hash"], row["committed_at"], row["run_id"], row["summary"])
 
+    def get_version(self, version: int) -> ProjectState:
+        with self._connection() as connection:
+            row = connection.execute("SELECT * FROM state_versions WHERE version = ?", (int(version),)).fetchone()
+        if row is None:
+            raise StateConflictError(f"Factory state version does not exist: {version}")
+        return ProjectState(row["version"], row["state_hash"], row["committed_at"], row["run_id"], row["summary"])
+
     def begin(self, run_id: str, base_version: int, summary: str) -> None:
         current = self.current()
         if current.version != base_version:
@@ -143,6 +150,41 @@ class StateCoordinator:
             )
             connection.execute("DELETE FROM contract_locks WHERE run_id = ?", (run_id,))
             return ProjectState(new_version, new_hash, timestamp, run_id, summary)
+
+    def rollback_commit(
+        self,
+        run_id: str,
+        expected_version: int,
+        restored_hash: str,
+        actor: str,
+        reason: str,
+    ) -> ProjectState:
+        """Append a rollback state without rewriting prior version history."""
+        with self._connection() as connection:
+            row = connection.execute("SELECT * FROM state_versions ORDER BY version DESC LIMIT 1").fetchone()
+            current_version = int(row["version"]) if row else 0
+            if current_version != int(expected_version):
+                raise StateConflictError(
+                    f"Rollback rejected: expected latest state {expected_version}, current is {current_version}."
+                )
+            timestamp = _now()
+            new_version = current_version + 1
+            rollback_id = f"{run_id}:rollback:{new_version}"
+            summary = f"Rollback of {run_id} by {actor}: {reason}"
+            connection.execute(
+                "INSERT INTO state_versions(version, state_hash, committed_at, run_id, summary) VALUES(?, ?, ?, ?, ?)",
+                (new_version, restored_hash, timestamp, rollback_id, summary),
+            )
+            connection.execute(
+                "UPDATE state_transactions SET status = 'ROLLED_BACK', finished_at = ? WHERE run_id = ?",
+                (timestamp, run_id),
+            )
+            connection.execute(
+                "INSERT INTO state_transactions(run_id, base_version, result_version, status, summary, created_at, finished_at) VALUES(?, ?, ?, 'COMMITTED', ?, ?, ?)",
+                (rollback_id, current_version, new_version, summary, timestamp, timestamp),
+            )
+            connection.execute("DELETE FROM contract_locks WHERE run_id = ?", (run_id,))
+            return ProjectState(new_version, restored_hash, timestamp, rollback_id, summary)
 
     def abort(self, run_id: str, summary: str) -> None:
         with self._connection() as connection:

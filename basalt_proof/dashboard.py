@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path
 
 from .models import ProofReport
+from .release import PRODUCT_NAME
 
 
 def _esc(value: object) -> str:
@@ -152,7 +153,7 @@ ul {{ line-height:1.9; }}
 </head>
 <body>
 <header class="hero">
-  <div class="logo">BASALT v2.5 PRIVATE BETA FULL BUILD SYSTEM</div>
+  <div class="logo">{_esc(PRODUCT_NAME.upper())}</div>
   <h1>{_esc(report.project_name)}</h1>
   <div class="subtitle">Proof-first repository verification. Basalt measures whether this repository has enough evidence, security discipline, and test strength to be trusted.</div>
   <div class="status"><span class="dot"></span><b>{_esc(status)}</b><span>Proof Score: {_esc(report.score)}/100</span></div>
@@ -187,7 +188,7 @@ ul {{ line-height:1.9; }}
   </section>
   <section class="section"><h2>Generated Artifacts</h2><ul>{artifacts}</ul><p class="mut">Attach these artifacts to pull requests as proof evidence.</p></section>
   <section class="section"><h2>Raw JSON Evidence</h2><pre>{_esc(data)}</pre></section>
-  <div class="footer">Basalt v3.0.0-rc.3 — Production Workspace Candidate. Verified software, not vibes.</div>
+  <div class="footer">Basalt 3.0.0 RC4 — Production Candidate. Verified software, not vibes.</div>
 </main>
 </body>
 </html>"""

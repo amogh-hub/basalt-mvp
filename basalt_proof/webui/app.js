@@ -6,7 +6,11 @@ const state = {
   bootstrap: { actions_enabled: false, action_token: "" },
   factory: null,
   beta: null,
+  architecture: null,
+  preview: null,
+  operations: null,
   selectedFactoryRun: null,
+  selectedTransaction: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -60,6 +64,7 @@ function banner(message, kind = "good") {
   const node = byId("banner");
   node.textContent = message;
   node.className = `banner ${kind}`;
+  text("status-live", message);
   window.setTimeout(() => node.classList.add("hidden"), 4500);
 }
 
@@ -112,8 +117,8 @@ function renderOverview(data) {
   text("risk-badge", `Risk ${data.truth.risk}`);
   text("freshness-badge", data.truth.graph_fresh ? "Graph fresh" : "Graph stale");
 
-  text("checks-metric", `${data.proof.checks.passed}/${data.proof.checks.total}`);
-  text("checks-sub", `${data.proof.checks.failed} failed · ${data.proof.checks.skipped} skipped`);
+  text("checks-metric", `${data.proof.checks.passed}/${data.proof.checks.applicable ?? data.proof.checks.total} applicable`);
+  text("checks-sub", `${data.proof.checks.failed} failed · ${data.proof.checks.skipped} not applicable`);
   text("mutation-metric", data.proof.mutations.killed);
   text("mutation-sub", `${data.proof.mutations.survived} survived`);
   text("edges-metric", formatNumber(data.graph.edges));
@@ -148,6 +153,22 @@ function renderOverview(data) {
   renderArtifacts(data.artifacts.items || []);
   renderLanguages(data.graph.languages || {});
   renderFactoryRuns(data.factory?.recent || []);
+  const agentTransactions = (data.transactions?.recent || []).filter((item) => (item.kind || "agent") === "agent");
+  if (!state.selectedFactoryRun && agentTransactions.length) renderStandaloneAgentTimeline(agentTransactions);
+}
+
+function renderStandaloneAgentTimeline(items) {
+  const container = byId("agent-execution-list");
+  clear(container);
+  container.className = "stack-list";
+  items.slice(0, 12).forEach((item) => {
+    const card = element("button", "stack-item");
+    card.type = "button";
+    card.append(element("strong", "", `${item.role || item.agent_role || "Agent"} · ${item.status || "UNKNOWN"}`));
+    card.append(element("p", "", `${item.task || item.run_id} · ${item.patch_file_count || 0} patch files · ${item.changed_lines || 0} changed lines`));
+    card.addEventListener("click", () => showTransaction(item));
+    container.append(card);
+  });
 }
 
 function renderFactoryRuns(runs) {
@@ -209,7 +230,8 @@ function renderFactoryDetail(run) {
     ["Status", run.status], ["Template", run.template], ["Base state", run.base_state_version],
     ["Committed state", run.committed_state_version || "—"], ["Tasks", (run.tasks || []).length],
     ["Epochs", (run.epochs || []).length], ["Proof", run.proof_status ? `${run.proof_status} ${run.proof_score}/100` : "Not run"],
-    ["Target", run.target_path || "Not assembled"], ["Message", run.message],
+    ["Output state", shortHash(run.project_state_hash)], ["Target", run.target_path || "Not assembled"],
+    ["Execution mode", run.execution_truth?.mode || "DETERMINISTIC_LOCAL"], ["Message", run.message],
   ];
   entries.forEach(([label, value]) => {
     const card = element("div", "detail-card");
@@ -224,6 +246,17 @@ function renderFactoryDetail(run) {
     build.disabled = !state.bootstrap.actions_enabled;
     build.addEventListener("click", () => buildFactoryRun(run.run_id));
     actions.append(build);
+  }
+  if (run.rollback?.eligible || run.status === "VERIFIED") {
+    const rollback = element("button", "button secondary", "Rollback factory output");
+    rollback.type = "button";
+    rollback.disabled = !state.bootstrap.actions_enabled;
+    rollback.addEventListener("click", () => openActionDialog("factory-rollback", run.run_id));
+    actions.append(rollback);
+  }
+  if (run.execution_truth?.claim) {
+    const truth = element("p", "muted", run.execution_truth.claim);
+    actions.append(truth);
   }
   byId("factory-detail-panel").classList.remove("hidden");
   renderPlan(run);
@@ -268,8 +301,10 @@ function renderAgentRecords(records) {
   records.forEach((item) => {
     const card = element("div", "stack-item");
     card.append(element("strong", "", `${item.agent_role} · ${item.status}`));
-    const model = item.model_assignment?.model || "deterministic";
-    card.append(element("p", "", `${item.summary} · model ${model}`));
+    const model = item.model_assignment?.model || "not invoked";
+    const mode = item.execution_mode || "DETERMINISTIC_LOCAL";
+    const deps = (item.dependency_ids || []).length ? ` · depends on ${(item.dependency_ids || []).join(", ")}` : "";
+    card.append(element("p", "", `${item.summary} · ${mode} · routed profile ${model}${deps}`));
     container.append(card);
   });
 }
@@ -291,17 +326,49 @@ async function buildFactoryRun(runId) {
   } catch (error) { banner(error.message, "bad"); }
 }
 
+async function rollbackFactoryRun(runId, actor, reason) {
+  const result = await api(`/api/v1/factory/runs/${encodeURIComponent(runId)}/rollback`, {
+    method: "POST",
+    action: true,
+    body: JSON.stringify({ actor, reason }),
+  });
+  banner("Factory output quarantined and rollback state committed.");
+  await loadAll();
+  const refreshed = await api(`/api/v1/factory/runs/${encodeURIComponent(runId)}`);
+  renderFactoryDetail(refreshed);
+  return result;
+}
+
 function renderProof(report) {
   state.proof = report;
   const checks = report.checks || [];
   const findings = report.security_findings || [];
   const mutations = report.mutations || [];
-  text("proof-passed", checks.filter((item) => item.status === "PASS").length);
-  text("proof-failed", checks.filter((item) => item.status === "FAIL").length);
+  const normalized = (value) => String(value || "UNKNOWN").toUpperCase();
+  text("proof-passed", checks.filter((item) => normalized(item.status) === "PASS").length);
+  text("proof-failed", checks.filter((item) => normalized(item.status) === "FAIL").length);
   text("proof-survived", mutations.filter((item) => item.survived === true).length);
   text("proof-high", findings.filter((item) => String(item.level).toUpperCase() === "HIGH").length);
   text("proof-sandbox", `Sandbox ${report.sandbox || "unknown"}`);
   text("proof-finished", report.finished_at ? `Finished ${formatDate(report.finished_at)}` : "No verification yet");
+
+  const breakdown = byId("proof-breakdown");
+  clear(breakdown);
+  const scoreItems = report.score_breakdown || [];
+  if (!scoreItems.length) {
+    breakdown.className = "stack-list empty-state";
+    breakdown.textContent = "No score breakdown loaded.";
+  } else {
+    breakdown.className = "stack-list";
+    scoreItems.forEach((item) => {
+      const card = element("div", "stack-item");
+      const delta = item.points ?? item.score ?? item.delta ?? 0;
+      const label = item.label || item.name || item.category || item.rule || "Proof component";
+      card.append(element("strong", "", `${label} · ${delta >= 0 ? "+" : ""}${delta}`));
+      card.append(element("p", "", item.reason || item.message || item.status || "Deterministic proof-score component."));
+      breakdown.append(card);
+    });
+  }
 
   const body = byId("checks-table");
   clear(body);
@@ -314,13 +381,15 @@ function renderProof(report) {
   } else {
     checks.forEach((item) => {
       const row = document.createElement("tr");
+      const status = normalized(item.status);
+      const displayStatus = ["SKIP", "SKIPPED", "NOT_APPLICABLE"].includes(status) ? "NOT_APPLICABLE" : status;
       row.append(element("td", "", item.name));
       const statusCell = document.createElement("td");
-      statusCell.append(element("span", `status-mini ${item.status}`, item.status));
+      statusCell.append(element("span", `status-mini ${displayStatus}`, displayStatus));
       row.append(statusCell);
       row.append(element("td", "", item.sandbox || "—"));
       row.append(element("td", "", `${item.duration_ms || 0} ms`));
-      row.append(element("td", "", item.message || "—"));
+      row.append(element("td", "", item.message || (displayStatus === "NOT_APPLICABLE" ? "No command configured; not included in applicable checks." : "—")));
       body.append(row);
     });
   }
@@ -394,56 +463,105 @@ function appendTransactionEntries(container, entries) {
 
 async function showTransaction(item) {
   try {
+    state.selectedTransaction = { kind: item.kind || "agent", run_id: item.run_id };
     const container = byId("run-detail");
     clear(container);
     if (item.kind === "factory") {
       const run = await api(`/api/v1/factory/runs/${encodeURIComponent(item.run_id)}`);
       text("run-detail-title", `${run.product_name || "Factory"} · state transaction`);
       appendTransactionEntries(container, [
-        ["Type", "Factory state commit"],
-        ["Status", item.status || run.status],
-        ["Product", run.product_name],
-        ["Base state", item.base_version],
-        ["Committed state", item.result_version ?? run.committed_state_version],
-        ["Tasks", (run.tasks || []).length],
-        ["Epochs", (run.epochs || []).length],
-        ["Proof", run.proof_status ? `${run.proof_status} ${run.proof_score}/100` : "Not run"],
-        ["Target", run.target_path],
-        ["Updated", formatDate(item.updated_at || run.updated_at)],
-        ["Rollback", "Not exposed for factory state in Phase 6; generated output remains isolated."],
+        ["Type", "Factory state transaction"], ["Status", run.status], ["Product", run.product_name],
+        ["Base state version", run.base_state_version], ["Committed state version", run.committed_state_version || "—"],
+        ["Output state hash", shortHash(run.project_state_hash)], ["Tasks", (run.tasks || []).length],
+        ["Epochs", (run.epochs || []).length], ["Proof", run.proof_status ? `${run.proof_status} ${run.proof_score}/100` : "Not run"],
+        ["Target", run.target_path], ["Execution truth", run.execution_truth?.mode || "DETERMINISTIC_LOCAL"],
+        ["Updated", formatDate(run.updated_at)], ["Rollback", run.rollback?.performed ? "Performed" : (run.rollback?.eligible ? "Eligible" : "Not eligible")],
       ]);
+      if (run.rollback?.record) {
+        const record = run.rollback.record;
+        appendTransactionEntries(container, [
+          ["Rolled back by", record.actor], ["Rollback reason", record.reason],
+          ["Restored hash", shortHash(record.restored_state_hash)], ["Quarantine", record.quarantine_path],
+        ]);
+      }
+      const actions = element("div", "approval-actions");
+      if (run.rollback?.eligible) {
+        const rollback = element("button", "button secondary", "Rollback factory output");
+        rollback.type = "button";
+        rollback.disabled = !state.bootstrap.actions_enabled;
+        rollback.addEventListener("click", () => openActionDialog("factory-rollback", run.run_id));
+        actions.append(rollback);
+      }
+      if (actions.childElementCount) container.append(actions);
     } else {
       const run = await api(`/api/v1/runs/${encodeURIComponent(item.run_id)}`);
       text("run-detail-title", run.run_id);
+      const patch = run.patch_scope || {};
+      const impact = run.impact_radius || {};
+      const decision = run.decision_context || {};
+      const approval = decision.approval || {};
+      const provenance = run.transaction_provenance || {};
       appendTransactionEntries(container, [
-        ["Type", "Agent patch transaction"],
-        ["Status", run.status], ["Task", run.task], ["Role", run.agent_role],
+        ["Type", "Agent patch transaction"], ["Status", run.status], ["Task", run.task], ["Proposer", run.agent_role],
         ["Base state", shortHash(run.base_state_hash)], ["Current state", shortHash(run.current_state_hash)],
-        ["Attempt", `${run.attempt}/${run.max_attempts}`], ["Files", (run.impacted_files || []).length],
-        ["Tests", (run.impacted_tests || []).length], ["Features", (run.impacted_features || []).length],
+        ["Patch files", patch.files_changed ?? (patch.files || []).length], ["Changed lines", patch.changed_lines || 0],
+        ["Additions / deletions", `+${patch.additions || 0} / −${patch.deletions || 0}`],
+        ["Impact radius · files", (impact.files || []).length], ["Impact radius · tests", (impact.tests || []).length],
+        ["Impact radius · features", (impact.features || []).length], ["Policy verdict", decision.policy_verdict],
+        ["Risk", decision.risk], ["Required approvals", (decision.required_approvals || []).join(", ") || "None"],
+        ["Approved by", approval.actor || "—"], ["Approval reason", approval.reason || "—"],
+        ["Proof after", provenance.proof_status ? `${provenance.proof_status} ${provenance.proof_score}/100` : "Not committed"],
+        ["Rollback", run.rollback?.performed ? `Performed · ${shortHash(run.rollback.restored_hash)}` : (run.rollback?.eligible ? "Eligible" : "Not eligible")],
         ["Message", run.message], ["Created", formatDate(run.created_at)], ["Updated", formatDate(run.updated_at)],
       ]);
+      if ((decision.policy_reasons || []).length) {
+        const details = element("details", "evidence-detail");
+        details.open = true;
+        details.append(element("summary", "", "Policy reasons and risk controls"));
+        const list = element("ul", "evidence-list");
+        (decision.policy_reasons || []).forEach((reason) => list.append(element("li", "", reason)));
+        (decision.risk_flags || []).forEach((flag) => list.append(element("li", "", `Risk flag: ${flag}`)));
+        details.append(list);
+        container.append(details);
+      }
+      if (run.patch_preview) {
+        const details = element("details", "evidence-detail");
+        details.open = true;
+        details.append(element("summary", "", `Proposed patch · ${(patch.files || []).join(", ") || "diff"}`));
+        details.append(element("pre", "transaction-diff", run.patch_preview));
+        container.append(details);
+      }
+      if ((run.evidence || []).length) {
+        const details = element("details", "evidence-detail");
+        details.append(element("summary", "", `${run.evidence.length} linked evidence artifacts`));
+        const list = element("div", "artifact-list");
+        run.evidence.forEach((artifact) => {
+          const row = element("button", "artifact-item");
+          row.type = "button";
+          row.append(element("strong", "", artifact.name), element("span", "", `SHA ${shortHash(artifact.sha256)} · ${artifact.schema}`));
+          row.addEventListener("click", () => { switchView("evidence"); previewArtifact(artifact); });
+          list.append(row);
+        });
+        details.append(list);
+        container.append(details);
+      }
       const actions = element("div", "approval-actions");
       if (run.status === "AWAITING_APPROVAL") {
         const approve = element("button", "button primary", "Approve");
-        approve.type = "button";
-        approve.disabled = !state.bootstrap.actions_enabled;
+        approve.type = "button"; approve.disabled = !state.bootstrap.actions_enabled;
         approve.addEventListener("click", () => openActionDialog("approve", run.run_id));
         const reject = element("button", "button secondary", "Reject");
-        reject.type = "button";
-        reject.disabled = !state.bootstrap.actions_enabled;
+        reject.type = "button"; reject.disabled = !state.bootstrap.actions_enabled;
         reject.addEventListener("click", () => openActionDialog("reject", run.run_id));
         actions.append(approve, reject);
       } else if (run.status === "APPROVED") {
         const apply = element("button", "button primary", "Apply and prove");
-        apply.type = "button";
-        apply.disabled = !state.bootstrap.actions_enabled;
+        apply.type = "button"; apply.disabled = !state.bootstrap.actions_enabled;
         apply.addEventListener("click", () => openActionDialog("apply", run.run_id));
         actions.append(apply);
       } else if (run.status === "VERIFIED") {
         const rollback = element("button", "button secondary", "Rollback transaction");
-        rollback.type = "button";
-        rollback.disabled = !state.bootstrap.actions_enabled;
+        rollback.type = "button"; rollback.disabled = !state.bootstrap.actions_enabled;
         rollback.addEventListener("click", () => openActionDialog("rollback", run.run_id));
         actions.append(rollback);
       }
@@ -453,6 +571,32 @@ async function showTransaction(item) {
     switchView("transactions");
   } catch (error) {
     banner(error.message, "bad");
+  }
+}
+
+async function hydrateAgentApprovalCard(card, item) {
+  try {
+    const run = await api(`/api/v1/runs/${encodeURIComponent(item.run_id)}`);
+    const decision = run.decision_context || {};
+    const patch = run.patch_scope || {};
+    const detail = element("details", "approval-evidence");
+    detail.open = String(decision.risk || item.risk).toUpperCase() === "HIGH";
+    detail.append(element("summary", "", "Decision evidence"));
+    const grid = element("div", "detail-grid compact-detail");
+    [
+      ["Patch files", (patch.files || []).join(", ") || "None"], ["Changed lines", patch.changed_lines || 0],
+      ["Base hash", shortHash(decision.base_state_hash)], ["Policy", decision.policy_verdict || "UNKNOWN"],
+      ["Required approvals", (decision.required_approvals || []).join(", ") || "None"],
+      ["Proof context", decision.proof_before ? "Before-proof evidence linked" : "Not available"],
+    ].forEach(([label, value]) => {
+      const cell = element("div", "detail-card"); cell.append(element("span", "", label), element("strong", "", value)); grid.append(cell);
+    });
+    detail.append(grid);
+    (decision.policy_reasons || []).forEach((reason) => detail.append(element("p", "muted", reason)));
+    if (run.patch_preview) detail.append(element("pre", "transaction-diff", run.patch_preview));
+    card.insertBefore(detail, card.lastElementChild);
+  } catch (error) {
+    card.append(element("p", "muted", `Decision evidence unavailable: ${error.message}`));
   }
 }
 
@@ -496,9 +640,12 @@ function renderApprovals(items) {
       ));
     } else {
       copy.append(element(
-        "p",
-        "",
-        `${item.run_id} · Risk ${item.risk || "unknown"} · ${item.role || "Agent"}`
+        "p", "",
+        `${item.run_id} · Risk ${item.risk || "unknown"} · ${item.role || item.agent_role || "Agent"}`
+      ));
+      copy.append(element(
+        "p", "",
+        `${item.patch_file_count || 0} patch files · ${item.changed_lines || 0} changed lines · base ${shortHash(item.base_state_hash)}`
       ));
     }
 
@@ -550,6 +697,7 @@ function renderApprovals(items) {
 
     if (actions.childElementCount) card.append(actions);
     container.append(card);
+    if (!isDeployment) hydrateAgentApprovalCard(card, item);
   });
 }
 
@@ -560,6 +708,8 @@ function renderBeta(data) {
   const providers = data?.providers || {};
   const deployments = data?.deployments || {};
   const projects = workspace.projects || [];
+  const teams = workspace.teams || [];
+  const activity = workspace.activity || [];
   const jobItems = jobs.jobs || [];
   const providerItems = providers.providers || [];
   const deploymentItems = deployments.deployments || [];
@@ -587,6 +737,19 @@ function renderBeta(data) {
     });
   };
 
+  const orgItems = teams.map((item) => ({
+    ...item,
+    activity: activity.find((event) => event.team_id === item.team_id),
+  }));
+  renderStack("beta-organizations", orgItems, (item) => ({
+    title: `${item.name || item.team_id} · ${item.status || "ACTIVE"}`,
+    detail: `${item.slug || "local-team"} · owner ${item.created_by || "unknown"}${item.activity ? ` · latest ${item.activity.action}` : ""}`,
+  }), `No local organizations registered. ${workspace.counts?.users || 0} users · ${workspace.counts?.memberships || 0} memberships.`);
+  renderStack("beta-runtime", data?.runtime?.workspaces || data?.runtime?.items || [], (item) => ({
+    title: item.job_id || item.workspace || "Isolated workspace",
+    detail: `${item.status || "prepared"} · ${typeof item.profile === "object" ? (item.profile?.name || "private-beta") : (item.profile || "private-beta")}`,
+  }), "No active isolated workspaces. Jobs use lease-based local workers; managed remote workers are not claimed.");
+
   renderStack("beta-projects", projects, (item) => ({
     title: item.name || item.project_id,
     detail: `${item.template || "project"} · ${item.privacy_mode || "local"} · ${item.status || "ACTIVE"}`,
@@ -605,6 +768,86 @@ function renderBeta(data) {
   }), "No deployment artifacts packaged.");
 }
 
+function renderArchitecture(data) {
+  state.architecture = data;
+  const summary = data?.summary || {};
+  text("architecture-files", summary.source_files || 0);
+  text("architecture-modules", summary.modules || 0);
+  text("architecture-routes", summary.routes || 0);
+  text("architecture-schemas", summary.schemas || 0);
+  text("architecture-freshness", data?.fresh ? `Fresh · ${shortHash(data.state_hash)}` : "Graph stale");
+  const layers = byId("architecture-layers");
+  clear(layers);
+  (data?.layers || []).forEach((item) => {
+    const card = element("article", "architecture-card");
+    card.append(element("h3", "", `${item.name} · ${item.count}`));
+    const list = element("ul");
+    (item.files || []).slice(0, 8).forEach((file) => list.append(element("li", "", file)));
+    card.append(list);
+    layers.append(card);
+  });
+  const apiItems = [...(data?.api?.discovered || []).map((item) => ({ title: `${item.method} ${item.path}`, copy: "Source-discovered endpoint" })), ...(data?.api?.graph_routes || []).map((item) => ({ title: item, copy: "Knowledge-graph route signal" }))];
+  renderStack("architecture-api", apiItems, (item) => item, "No API routes detected.");
+  const db = data?.database || {};
+  const dbItems = [
+    { title: `Engine · ${db.engine || "Not detected"}`, copy: `${(db.files || []).length} persistence source files` },
+    ...(db.tables || []).map((item) => ({ title: `Table · ${item}`, copy: "Source-discovered schema" })),
+    ...(db.schema_signals || []).map((item) => ({ title: `Schema · ${item}`, copy: "Knowledge-graph schema signal" })),
+  ];
+  renderStack("architecture-database", dbItems, (item) => item, "No database schema detected.");
+  const depRoot = byId("architecture-dependencies");
+  clear(depRoot);
+  const table = document.createElement("table");
+  table.innerHTML = "<thead><tr><th>Source module</th><th>Target module</th><th>Signals</th></tr></thead>";
+  const body = document.createElement("tbody");
+  (data?.dependencies || []).slice(0, 80).forEach((item) => {
+    const row = document.createElement("tr");
+    row.append(element("td", "", item.source), element("td", "", item.target), element("td", "", item.signals));
+    body.append(row);
+  });
+  if (!body.childElementCount) {
+    const row = document.createElement("tr"); const cell = element("td", "empty-state", "No cross-module dependencies detected."); cell.colSpan = 3; row.append(cell); body.append(row);
+  }
+  table.append(body); depRoot.append(table);
+}
+
+function renderPreview(data) {
+  state.preview = data;
+  text("preview-status", data?.status || "STOPPED");
+  text("preview-available", data?.available ? "Yes" : "No");
+  text("preview-mode", data?.mode || "STATIC_SAME_ORIGIN");
+  text("preview-root", data?.root || (data?.available ? "repository root" : "—"));
+  const detail = byId("preview-detail");
+  clear(detail);
+  [["State", data?.status || "STOPPED"], ["Reason", data?.reason || "—"], ["Started", formatDate(data?.started_at)], ["Started by", data?.started_by || "—"], ["Server-side execution", "Disabled"], ["Protected paths", data?.security?.protected_paths ? "Enforced" : "Unknown"]].forEach(([label, value]) => {
+    const card = element("div", "detail-card"); card.append(element("span", "", label), element("strong", "", value)); detail.append(card);
+  });
+  byId("preview-start").disabled = !state.bootstrap.actions_enabled || !data?.available || data?.status === "RUNNING";
+  byId("preview-stop").disabled = !state.bootstrap.actions_enabled || data?.status !== "RUNNING";
+  byId("preview-open").classList.toggle("hidden", data?.status !== "RUNNING");
+}
+
+function renderOperations(data) {
+  state.operations = data;
+  const metrics = data?.metrics || {};
+  text("operations-status", `${data?.status || "UNKNOWN"} · local`);
+  text("operations-incidents", metrics.incidents || 0);
+  text("operations-high", metrics.high_incidents || 0);
+  text("operations-approvals", metrics.pending_approvals || 0);
+  text("operations-rollbacks", metrics.rollback_ready || 0);
+  renderStack("operations-incident-list", data?.incidents || [], (item) => ({
+    title: `${item.severity} · ${item.code}`,
+    copy: `${item.summary} · source ${item.source}`,
+  }), "No incidents detected from local proof, graph, queue, deployment, or preview state.");
+  const recovery = byId("operations-recovery");
+  clear(recovery);
+  Object.entries(data?.recovery || {}).forEach(([label, value]) => {
+    const card = element("div", "detail-card");
+    card.append(element("span", "", label.replaceAll("_", " ")), element("strong", "", typeof value === "boolean" ? (value ? "Available" : "Unavailable") : value));
+    recovery.append(card);
+  });
+}
+
 function renderArtifacts(items) {
   const container = byId("artifact-list");
   clear(container);
@@ -614,24 +857,46 @@ function renderArtifacts(items) {
     return;
   }
   container.className = "artifact-list";
+  const groups = new Map();
   items.forEach((item) => {
-    const row = element("div", "artifact-item");
-    const info = element("div");
-    info.append(element("strong", "", item.name));
-    info.append(element("span", "", `${item.path} · ${formatNumber(item.size_bytes)} bytes`));
-    row.append(info, element("span", "", "Open"));
-    row.addEventListener("click", () => previewArtifact(item));
-    container.append(row);
+    const key = `${item.group_type || "evidence"}:${item.group_id || "latest"}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+  groups.forEach((groupItems, key) => {
+    const heading = element("div", "artifact-group-heading");
+    heading.append(element("strong", "", key.replace(":", " · ")));
+    heading.append(element("span", "", `${groupItems.length} artifacts`));
+    container.append(heading);
+    groupItems.forEach((item) => {
+      const row = element("button", "artifact-item");
+      row.type = "button";
+      const info = element("div");
+      info.append(element("strong", "", item.name));
+      info.append(element("span", "", `${item.schema || item.mime_type} · SHA ${shortHash(item.sha256)} · ${item.mutability || "status unknown"}`));
+      row.append(info, element("span", "", "Open"));
+      row.addEventListener("click", () => previewArtifact(item));
+      container.append(row);
+    });
   });
 }
 
 async function previewArtifact(item) {
   try {
     const result = await api(`/api/v1/artifacts/content/${encodeURIComponent(item.id)}`);
-    text("artifact-preview-title", result.name);
-    byId("artifact-preview").textContent = typeof result.content === "string"
+    text("artifact-preview-title", `${result.name} · SHA ${shortHash(result.sha256)}`);
+    const metadata = `Origin: ${result.origin || "unknown"}
+Group: ${result.group_type || "evidence"}/${result.group_id || "latest"}
+Schema: ${result.schema || result.mime_type}
+Integrity: ${result.integrity || "unknown"}
+Mutability: ${result.mutability || "unknown"}
+Created: ${formatDate(result.created_at)}
+Modified: ${formatDate(result.modified_at)}
+
+`;
+    byId("artifact-preview").textContent = metadata + (typeof result.content === "string"
       ? result.content
-      : JSON.stringify(result.content, null, 2);
+      : JSON.stringify(result.content, null, 2));
   } catch (error) {
     banner(error.message, "bad");
   }
@@ -696,6 +961,7 @@ function openActionDialog(action, targetId = "") {
     verify: "Run verification",
     "deployment-approve": "Approve deployment",
     "deployment-promote": "Promote deployment",
+    "factory-rollback": "Rollback factory output",
   };
 
   text("dialog-title", titles[action] || "Confirm action");
@@ -710,6 +976,8 @@ function openActionDialog(action, targetId = "") {
       "dialog-copy",
       `Approve ${targetId} after reviewing its proof, checksum, and environment. Approval does not promote it automatically.`
     );
+  } else if (action === "factory-rollback") {
+    text("dialog-copy", `Quarantine verified factory output ${targetId} and append a rollback state. The original evidence remains auditable.`);
   } else if (action === "deployment-promote") {
     text(
       "dialog-copy",
@@ -758,12 +1026,13 @@ async function submitAction(event) {
   let path = "/api/v1/verify";
   let body = { sandbox: "auto" };
 
-  if (action.startsWith("deployment-")) {
+  if (action === "factory-rollback") {
+    path = `/api/v1/factory/runs/${encodeURIComponent(targetId)}/rollback`;
+    body = { actor, reason };
+  } else if (action.startsWith("deployment-")) {
     const deploymentAction = action.replace("deployment-", "");
     path = `/api/v1/beta/deployments/${encodeURIComponent(targetId)}/${deploymentAction}`;
-    body = deploymentAction === "approve"
-      ? { actor, reason }
-      : { actor };
+    body = deploymentAction === "approve" ? { actor, reason } : { actor };
   } else if (action !== "verify") {
     path = `/api/v1/runs/${encodeURIComponent(targetId)}/${action}`;
     body = action === "apply"
@@ -804,13 +1073,25 @@ async function submitAction(event) {
 
 async function loadAll() {
   try {
-    const [overview, proof, factory, beta] = await Promise.all([
-      api("/api/v1/overview"), api("/api/v1/proof"), api("/api/v1/factory"), api("/api/v1/beta")
+    const [overview, proof, factory, beta, architecture, preview, operations] = await Promise.all([
+      api("/api/v1/overview"), api("/api/v1/proof"), api("/api/v1/factory"), api("/api/v1/beta"),
+      api("/api/v1/architecture"), api("/api/v1/preview"), api("/api/v1/operations")
     ]);
     renderOverview(overview);
     renderProof(proof || {});
     renderFactoryState(factory || {});
     renderBeta(beta || {});
+    renderArchitecture(architecture || {});
+    renderPreview(preview || {});
+    renderOperations(operations || {});
+    if (state.selectedTransaction && !byId("run-detail-panel").classList.contains("hidden")) {
+      const latest = (overview.transactions?.recent || []).find((item) => item.run_id === state.selectedTransaction.run_id && (item.kind || "agent") === state.selectedTransaction.kind);
+      if (latest) await showTransaction(latest);
+    }
+    if (state.selectedFactoryRun && !byId("factory-detail-panel").classList.contains("hidden")) {
+      const refreshed = await api(`/api/v1/factory/runs/${encodeURIComponent(state.selectedFactoryRun.run_id)}`);
+      renderFactoryDetail(refreshed);
+    }
   } catch (error) {
     banner(error.message, "bad");
   }
@@ -835,7 +1116,7 @@ document.querySelectorAll(".nav-item").forEach((node) => node.addEventListener("
 document.querySelectorAll("[data-jump]").forEach((node) => node.addEventListener("click", () => switchView(node.dataset.jump)));
 byId("refresh-button").addEventListener("click", loadAll);
 byId("verify-button").addEventListener("click", () => openActionDialog("verify"));
-byId("close-run-detail").addEventListener("click", () => byId("run-detail-panel").classList.add("hidden"));
+byId("close-run-detail").addEventListener("click", () => { state.selectedTransaction = null; byId("run-detail-panel").classList.add("hidden"); });
 byId("action-form").addEventListener("submit", submitAction);
 byId("impact-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -874,7 +1155,19 @@ byId("factory-plan-form").addEventListener("submit", async (event) => {
   } catch (error) { banner(error.message, "bad"); }
 });
 byId("close-factory-detail").addEventListener("click", () => byId("factory-detail-panel").classList.add("hidden"));
+byId("preview-start").addEventListener("click", async () => {
+  try {
+    const result = await api("/api/v1/preview/start", { method: "POST", action: true, body: JSON.stringify({ actor: "local-user" }) });
+    renderPreview(result); banner("Static preview started without arbitrary code execution.");
+  } catch (error) { banner(error.message, "bad"); }
+});
+byId("preview-stop").addEventListener("click", async () => {
+  try {
+    const result = await api("/api/v1/preview/stop", { method: "POST", action: true, body: JSON.stringify({ actor: "local-user" }) });
+    renderPreview(result); banner("Preview stopped.");
+  } catch (error) { banner(error.message, "bad"); }
+});
 
 const initialSection = window.location.hash.slice(1);
-if (["overview", "factory", "plan", "agents", "proof", "graph", "transactions", "approvals", "beta", "evidence"].includes(initialSection)) switchView(initialSection);
+if (["overview", "factory", "plan", "agents", "proof", "architecture", "graph", "preview", "transactions", "approvals", "beta", "operations", "evidence"].includes(initialSection)) switchView(initialSection);
 initialize();

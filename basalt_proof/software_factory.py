@@ -7,7 +7,7 @@ import re
 import shutil
 import tempfile
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,7 @@ from .prevention_engine import build_engineering_plan, write_engineering_plan_ar
 from .product_brain import build_product_blueprint, write_blueprint_artifacts
 from .proof import verify_repo
 from .report import write_json_report, write_markdown_report
+from .release import PRODUCT_NAME
 from .state_coordinator import ContractLockError, StateConflictError, StateCoordinator
 
 
@@ -676,11 +677,39 @@ This alpha project was assembled in a staging workspace and copied into place on
     return ["pyproject.toml", "basalt.yaml", "README.md", "docs/product-blueprint.json", "docs/engineering-plan.json", ".gitignore"]
 
 
+def _dependency_order(tasks: list[FactoryTask]) -> list[FactoryTask]:
+    """Return a stable topological order and fail closed on invalid task graphs."""
+    by_id = {task.task_id: task for task in tasks}
+    pending = set(by_id)
+    completed: set[str] = set()
+    ordered: list[FactoryTask] = []
+    while pending:
+        ready = sorted(
+            (by_id[task_id] for task_id in pending if set(by_id[task_id].dependencies) <= completed),
+            key=lambda item: (item.epoch, item.task_id),
+        )
+        if not ready:
+            unresolved = {task_id: by_id[task_id].dependencies for task_id in sorted(pending)}
+            raise FactoryError(f"Task graph contains unresolved or cyclic dependencies: {unresolved}")
+        for task in ready:
+            ordered.append(task)
+            pending.remove(task.task_id)
+            completed.add(task.task_id)
+    return ordered
+
+
 def _execute_task_records(run: FactoryRun, staging: Path) -> list[AgentExecutionRecord]:
+    """Record deterministic local materialisation in dependency order.
+
+    These records are intentionally not described as remote autonomous model execution.
+    They prove which specialist contract produced each artifact and in what valid order.
+    """
     assignments = {item.task_id: item for item in run.model_assignments}
     records: list[AgentExecutionRecord] = []
-    for task in sorted(run.tasks, key=lambda item: (item.epoch, item.task_id)):
-        started = _now()
+    base_time = datetime.now(timezone.utc)
+    for index, task in enumerate(_dependency_order(run.tasks)):
+        started_dt = base_time + timedelta(milliseconds=index * 2)
+        finished_dt = started_dt + timedelta(milliseconds=1)
         artifact_map = {
             "ProductAgent": ["docs/product-blueprint.json"],
             "ArchitectureAgent": ["docs/engineering-plan.json", "pyproject.toml"],
@@ -700,18 +729,23 @@ def _execute_task_records(run: FactoryRun, staging: Path) -> list[AgentExecution
             AgentExecutionRecord(
                 task_id=task.task_id,
                 agent_role=task.agent_role,
-                status="COMPLETED",
-                started_at=started,
-                finished_at=_now(),
-                summary=f"{task.agent_role} completed {task.title.lower()} within epoch {task.epoch}.",
+                status="MATERIALIZED",
+                started_at=started_dt.isoformat(),
+                finished_at=finished_dt.isoformat(),
+                summary=(
+                    f"Deterministic local {task.agent_role} contract materialized {task.title.lower()} "
+                    f"within epoch {task.epoch}; no remote autonomous execution is claimed."
+                ),
                 artifacts=[item for item in artifact_map.get(task.agent_role, []) if (staging / item).exists() or item == "factory-manifest.json"],
                 model_assignment=asdict(assignment) if assignment else {},
                 risk_flags=[task.risk_level] if task.risk_level in {"HIGH", "CRITICAL"} else [],
+                execution_mode="DETERMINISTIC_LOCAL",
+                dependency_ids=list(task.dependencies),
             )
         )
-        task.status = "COMPLETED"
+        task.status = "MATERIALIZED"
     for epoch in run.epochs:
-        epoch.status = "COMPLETED"
+        epoch.status = "MATERIALIZED"
     return records
 
 
@@ -844,6 +878,77 @@ def build_factory_run(
         raise
 
 
+def rollback_factory_run(
+    repo: Path,
+    run_id: str,
+    actor: str,
+    reason: str,
+    out_dir: Path | None = None,
+) -> FactoryRun:
+    """Quarantine a verified generated product and append a rollback state."""
+    repo = repo.resolve()
+    actor = actor.strip()
+    reason = reason.strip()
+    if not actor or not reason:
+        raise FactoryError("Rollback actor and reason are required.")
+    run = load_factory_run(repo, run_id, out_dir)
+    if run.status != FactoryRunStatus.VERIFIED:
+        raise FactoryError(f"Only a VERIFIED factory run can be rolled back (status={run.status.value}).")
+    target = Path(run.target_path).expanduser().resolve()
+    if target == repo or repo in target.parents or ".git" in target.parts:
+        raise FactoryError("Factory rollback target failed the repository safety boundary.")
+    if not target.exists() or not target.is_dir():
+        raise FactoryError("Verified factory target no longer exists; refusing to falsify rollback completion.")
+
+    state_root = out_dir or repo / ".basalt"
+    coordinator = StateCoordinator(state_root / "factory-state.sqlite3")
+    current = coordinator.current()
+    if current.version != run.committed_state_version:
+        raise FactoryError(
+            f"Factory state changed after this run (expected {run.committed_state_version}, current {current.version})."
+        )
+    restored = coordinator.get_version(run.base_state_version)
+    quarantine = (state_root / "factory-rollbacks" / run.run_id / f"state-{current.version}").resolve()
+    if quarantine.exists():
+        raise FactoryError(f"Rollback quarantine already exists: {quarantine}")
+    quarantine.parent.mkdir(parents=True, exist_ok=True)
+
+    shutil.move(str(target), str(quarantine))
+    try:
+        rollback_state = coordinator.rollback_commit(
+            run.run_id,
+            run.committed_state_version,
+            restored.state_hash,
+            actor,
+            reason,
+        )
+    except Exception:
+        if not target.exists() and quarantine.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(quarantine), str(target))
+        raise
+
+    run.status = FactoryRunStatus.ROLLED_BACK
+    run.message = f"Verified factory output rolled back by {actor}: {reason}"
+    rollback_record = {
+        "run_id": run.run_id,
+        "actor": actor,
+        "reason": reason,
+        "rolled_back_at": _now(),
+        "from_state_version": run.committed_state_version,
+        "rollback_state_version": rollback_state.version,
+        "restored_state_hash": rollback_state.state_hash,
+        "original_target": str(target),
+        "quarantine_path": str(quarantine),
+        "status": run.status.value,
+    }
+    rollback_path = _run_dir(repo, run_id, out_dir) / "rollback.json"
+    rollback_path.write_text(_safe_json(rollback_record), encoding="utf-8")
+    run.artifacts.append(str(rollback_path))
+    save_factory_run(repo, run, out_dir)
+    return run
+
+
 def create_product(
     repo: Path,
     prompt: str,
@@ -876,7 +981,7 @@ def factory_snapshot(repo: Path, out_dir: Path | None = None) -> dict[str, Any]:
     state = coordinator.bootstrap(repository_hash(repo))
     runs = list_factory_runs(repo, out_dir)
     return {
-        "platform": "Basalt v2.5 Private Beta Full Build System",
+        "platform": PRODUCT_NAME,
         "supported_templates": sorted(SUPPORTED_TEMPLATES),
         "metrics": {
             "total_runs": len(runs),

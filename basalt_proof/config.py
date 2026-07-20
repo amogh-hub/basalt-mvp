@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import shlex
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -190,13 +191,53 @@ def _python_install_command(repo_path: Path) -> str | None:
     return None
 
 
+PYTHON_COMMAND_EXCLUDE_DIRS = {
+    ".git", ".basalt", ".basalt-deps", ".venv", "venv", "node_modules",
+    "__pycache__", ".pytest_cache", "dist", "build", ".next",
+}
+
+
+def _python_compile_targets(repo_path: Path) -> list[str]:
+    """Return deterministic source roots without generated/runtime directories."""
+    targets: list[str] = []
+    for child in sorted(repo_path.iterdir(), key=lambda item: item.name.lower()):
+        if child.name in PYTHON_COMMAND_EXCLUDE_DIRS or child.name.endswith(".egg-info"):
+            continue
+        if child.is_file() and child.suffix == ".py":
+            targets.append(child.name)
+            continue
+        if child.is_dir():
+            try:
+                has_python = any(
+                    candidate.is_file()
+                    and candidate.suffix == ".py"
+                    and not any(part in PYTHON_COMMAND_EXCLUDE_DIRS for part in candidate.relative_to(repo_path).parts)
+                    for candidate in child.rglob("*.py")
+                )
+            except OSError:
+                has_python = False
+            if has_python:
+                targets.append(child.name)
+    return targets
+
+
+def _safe_python_compile_command(repo_path: Path) -> str:
+    targets = _python_compile_targets(repo_path)
+    if targets:
+        return "python -m compileall -q " + " ".join(shlex.quote(item) for item in targets)
+    # The regex is a final fallback for an empty/new repository. Quiet mode avoids
+    # noisy directory listings while -x prevents generated Basalt state from being compiled.
+    exclude = r"(^|/)(\.git|\.basalt|\.basalt-deps|\.venv|venv|node_modules|__pycache__|\.pytest_cache|dist|build|\.next)(/|$)"
+    return f"python -m compileall -q -x {shlex.quote(exclude)} ."
+
+
 def _infer_python_commands(repo_path: Path) -> dict[str, str | None]:
     has_tests = (repo_path / "tests").exists()
     use_pytest = _requirements_has(repo_path, "pytest") or (repo_path / "pytest.ini").exists()
     test_command = None
     if has_tests:
         test_command = "python -m pytest -q" if use_pytest else "python -m unittest discover -s tests -v"
-    lint = "ruff check ." if _requirements_has(repo_path, "ruff") else "python -m compileall ."
+    lint = "ruff check --exclude .basalt,.basalt-deps,.venv,venv,node_modules ." if _requirements_has(repo_path, "ruff") else _safe_python_compile_command(repo_path)
     typecheck = "python -m mypy ." if _requirements_has(repo_path, "mypy") else None
     return {
         "install": _python_install_command(repo_path),
@@ -361,7 +402,7 @@ def render_default_config(project_name: str = "my-app", project_type: str = "pyt
         commands = (
             "  install: null\n"
             "  build: null\n"
-            "  lint: python -m compileall .\n"
+            "  lint: python -m compileall -q -x '(^|/)(\\.git|\\.basalt|\\.basalt-deps|\\.venv|venv|node_modules|__pycache__|\\.pytest_cache|dist|build|\\.next)(/|$)' .\n"
             "  typecheck: null\n"
             "  test: python -m unittest discover -s tests -v"
         )

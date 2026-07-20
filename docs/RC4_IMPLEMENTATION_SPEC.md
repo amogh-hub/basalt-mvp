@@ -6,198 +6,134 @@ Basalt 3.0.0rc4 is the Phase 7 hardening and truth-correction candidate created 
 
 RC4 must preserve every capability that passed in RC3 while correcting misleading state, incomplete governance detail, workspace continuity gaps, and evidence/provenance weaknesses.
 
-RC4 is not the completion of Phase 7. It is the next hardened release candidate.
+RC4 also completes the remaining local Phase 7 product surfaces that can be implemented and tested without external cloud infrastructure.
 
-## Accepted RC3 Baseline
+RC4 is not Production Basalt v1 GA.
 
-The protected baseline is:
+## Accepted RC3 baseline
 
 - Version: 3.0.0rc3
 - Automated tests: 210 passed
 - Self-verification: VERIFIED, 98/100
 - Governed workflow: proposal → approval → token → apply → proof → rollback
 - Build Workspace browser acceptance completed
-- Git tag: rc3-accepted-baseline
+- Git baseline tag on the project Mac: `rc3-accepted-baseline`
 
-## Mandatory RC4 Corrections
+## Mandatory RC4 corrections
 
 ### RC4-01 — Release identity and branding truth
 
-Replace active product UI references that incorrectly describe RC3/RC4 as:
-
-- basalt-v2.5-private-beta
-- PRIVATE BETA
-- Phase 6
-
-Runtime product identity must come from one authoritative version and release-state source.
-
-Historical release notes and historical documentation must not be rewritten.
+Replace active product UI references that incorrectly describe RC3/RC4 as v2.5 private beta or Phase 6. Runtime product identity must come from one authoritative version and release-state source. Historical release notes remain historical.
 
 ### RC4-02 — Proof summary accuracy
 
-Correct proof reporting so that:
-
-- passed checks are counted as passed;
-- failed checks are counted as failed;
-- skipped or unavailable checks are not presented as failures;
-- the displayed skipped count matches the detailed check cards;
-- optional unconfigured checks use truthful language such as NOT_APPLICABLE or SKIPPED;
-- the 98/100 score has an understandable breakdown.
+- count passed, failed, warning, and skipped states accurately;
+- exclude not-applicable checks from the applicable denominator;
+- display skipped/not-applicable reasons;
+- expose a deterministic proof-score breakdown.
 
 ### RC4-03 — Verification output containment
 
-Default lint and verification commands must avoid scanning generated Basalt runtime state where appropriate, including:
-
-- .basalt/
-- virtual environments
-- Python caches
-- generated evidence and transaction artefacts
-
-This must not hide real project-source findings.
+Default lint and verification inference must avoid generated Basalt state, environments, dependencies, caches, and evidence while still scanning actual project source.
 
 ### RC4-04 — Workspace refresh continuity
 
-Browser refresh must restore, where valid:
-
-- open file tabs;
-- active file;
-- cursor position;
-- editor scroll position;
-- repository search query and state;
-- selected right-side panel;
-- panel sizing.
-
-Stale or missing files must be handled safely without crashing the workspace.
+Restore valid open tabs, active file, unsaved buffers, cursor, scroll, search, selected panel, and pane sizes. Missing or stale files must fail safely.
 
 ### RC4-05 — Diagnostic navigation precision
 
-Selecting a diagnostic must navigate to:
-
-- the correct file;
-- the correct line;
-- the reported column when available;
-- a visible cursor or selection at the problem location.
+Navigate to the correct file, line, and reported column, with the cursor visibly placed at the problem location.
 
 ### RC4-06 — Command availability consistency
 
-Commands shown in the Command Palette must match actual runtime availability.
-
-A command that has no configured implementation must either:
-
-- be disabled with a reason; or
-- be omitted.
-
-The palette must not advertise Build as executable when Build is unavailable.
+The command palette and buttons must match configured runtime availability. Unavailable commands must be omitted or disabled with a reason.
 
 ### RC4-07 — Approval decision context
 
-High-risk approval views must show sufficient decision evidence:
-
-- target file or files;
-- complete proposed diff;
-- changed-line count;
-- policy reason;
-- risk classification;
-- base-state hash;
-- expected impact;
-- available proof context;
-- proposer and creation time.
+High-risk approval views must show target files, complete diff, changed-line count, policy reason, risk, base hash, impact, proof context, proposer, and creation time.
 
 ### RC4-08 — Impact-versus-patch terminology
 
-Metrics such as Files, Tests and Features must distinguish between:
+Directly changed patch scope and calculated impact radius must be distinct.
 
-- directly changed patch scope; and
-- calculated impact radius.
+### RC4-09 — Transaction state synchronization
 
-The interface must not label affected dependencies as though they were edited files.
-
-### RC4-09 — Transaction state synchronisation
-
-After approval, apply, verification, rejection or rollback:
-
-- list state and detail state must agree;
-- stale detail panels must refresh automatically;
-- current state must not require closing and reopening the record;
-- state transitions must be auditable.
+List and detail state must agree after approval, apply, verification, rejection, or rollback without requiring close/reopen.
 
 ### RC4-10 — Transaction provenance and rollback UX
 
-Transaction details must expose:
-
-- transaction identifier;
-- base and resulting state hashes;
-- proposer and approver;
-- timestamps;
-- linked proof result;
-- linked evidence artefacts;
-- affected files;
-- rollback eligibility;
-- rollback result and restored hash.
+Expose identifiers, hashes, people, timestamps, proof, evidence, affected files, rollback eligibility, rollback result, and restored hash.
 
 ### RC4-11 — Evidence Vault depth
 
-Evidence must be grouped by run or transaction and expose:
-
-- artefact name;
-- type or schema;
-- origin;
-- creation time;
-- integrity hash;
-- immutable or mutable status;
-- associated proof, transaction and source state.
+Group artifacts by run or transaction and expose type/schema, origin, timestamps, integrity hash, mutability, proof, transaction, and source-state linkage.
 
 ### RC4-12 — Agent-execution truth
 
-Basalt must not describe deterministic template generation as real distributed or dependency-ordered agent execution.
-
-Either:
-
-- implement truthful dependency-ordered execution records; or
-- change product language to accurately describe deterministic planning and artefact generation.
-
-Timestamps and dependency relationships must not contradict each other.
+Do not describe deterministic template materialization as remote or autonomous multi-agent execution. Dependency and timestamp records must not contradict one another.
 
 ### RC4-13 — Git Workspace validation
 
-Run the complete Git browser acceptance workflow inside the RC4 Git repository:
+Support truthful read-only repository detection, branch, changes, diff, untracked files, conflicts, and recent history. Do not enable unintended commit, push, or destructive operations.
 
-- repository detection;
-- branch display;
-- changed-file display;
-- diff inspection;
-- clean-state reporting;
-- safe handling of untracked files;
-- no unintended commits, pushes or destructive operations.
+## Remaining local Phase 7 implementation gates
 
-## Required Regression Tests
+### P7-01 — Architecture, API, and database truth
 
-Every correction must include automated regression coverage where technically possible.
+Provide source-derived architecture layers, modules, route discovery, schema discovery, and dependency signals. Clearly identify static analysis as the source of truth.
 
-The automated suite must remain fully passing and must increase beyond the RC3 baseline when new regression tests are added.
+### P7-02 — Safe preview lifecycle
 
-## Required Acceptance Gates
+Provide same-origin static preview with start/stop controls, no arbitrary shell or backend execution, protected paths, traversal protection, and file limits.
 
-RC4 cannot be released until all applicable gates pass:
+### P7-03 — Local control-plane visibility
+
+Expose persistent local identities, teams, projects, durable jobs, providers, deployments, isolated workspaces, and honest capability boundaries.
+
+### P7-04 — Operations and recovery truth
+
+Synthesize local incidents from proof, graph, jobs, deployments, preview, approvals, and rollback readiness without claiming external uptime.
+
+### P7-05 — Factory rollback
+
+Expose append-only rollback that preserves prior state versions, quarantines generated output, records the restored hash, and does not erase ledger history.
+
+### P7-06 — Accessibility foundations
+
+Provide semantic navigation, skip link, status live region, keyboard controls, visible focus, and reduced-motion behavior.
+
+## Required regression tests
+
+Every correction and local Phase 7 gate requires automated coverage where technically possible. The complete suite must increase beyond the 210-test RC3 baseline and remain fully passing.
+
+## Required acceptance gates
 
 1. Full automated test suite.
-2. New regression tests for every corrected defect.
-3. Self-verification.
-4. Proof matrix.
-5. Temporary sandbox verification.
-6. Docker verification where supported.
-7. Governed approval/apply/prove/rollback workflow.
-8. Full Build Workspace browser acceptance.
-9. Git Workspace browser acceptance.
-10. Version and branding audit.
-11. Evidence and provenance audit.
-12. Transaction state-synchronisation audit.
-13. Clean working tree and reviewed release diff.
+2. RC4 regression suite.
+3. Python and JavaScript syntax validation.
+4. Self-verification.
+5. Critical proof matrix.
+6. Temporary sandbox verification.
+7. Docker verification where supported.
+8. Governed approval/apply/prove/rollback workflow.
+9. Command Center browser acceptance.
+10. Build Workspace browser acceptance.
+11. Git Workspace browser acceptance.
+12. Version and branding audit.
+13. Evidence and provenance audit.
+14. Transaction state-synchronization audit.
+15. Clean working tree and reviewed release diff.
+16. Reproducible release archive and checksum.
 
-## Release Rules
+## Release rules
 
 - Do not modify the RC3 baseline commit or tag.
-- Do not release RC4 before all mandatory corrections are verified.
-- Do not call Phase 7 complete after RC4.
-- Do not claim superiority over Cursor, Replit or Emergent without measured benchmark evidence.
-- Do not push or publish a GitHub release during implementation.
+- Do not release RC4 before mandatory corrections and applicable gates pass.
+- Do not call Production Basalt v1 GA merely because local source gates pass.
+- Do not claim superiority over Cursor, Replit, or Emergent without measured benchmark evidence.
+- Do not represent unavailable external systems as live.
+- Do not publish a GitHub release during implementation.
+
+## External infrastructure boundary
+
+Hosted multi-tenant identity, billing, remote workers, hardened microVMs, secret vaults, real cloud deployment execution, external telemetry, alerting, enterprise SSO, and compliance certification require actual providers and credentials. RC4 must provide truthful foundations and interfaces but must not fake production validation.

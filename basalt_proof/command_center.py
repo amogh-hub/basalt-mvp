@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import mimetypes
 import re
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .architecture import architecture_snapshot
 from .agent_runtime import (
     AgentRunError,
     apply_agent_run,
@@ -26,14 +28,18 @@ from .proof import verify_repo
 from .report import write_json_report, write_markdown_report
 from .dashboard import write_dashboard
 from .private_beta import PrivateBetaPlatform
+from .preview import StaticPreviewManager
+from .operations import operations_snapshot
 from .software_factory import (
     build_factory_run,
     factory_snapshot,
     list_factory_runs,
     load_factory_run,
     plan_factory_run,
+    rollback_factory_run,
 )
 from .state_coordinator import StateCoordinator
+from .release import PHASE, PHASE_NAME, PRODUCT_NAME, RELEASE_CHANNEL, VERSION, release_metadata
 
 
 COMMAND_CENTER_API_VERSION = "v1"
@@ -60,6 +66,35 @@ def _safe_relative(path: Path, root: Path) -> str:
         return path.name
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _artifact_schema(path: Path) -> str:
+    if path.suffix == ".json":
+        return f"basalt/{path.stem.replace('_', '-')}+json"
+    if path.suffix in {".md", ".markdown"}:
+        return "text/markdown"
+    if path.suffix == ".patch":
+        return "text/x-diff"
+    return mimetypes.guess_type(path.name)[0] or "text/plain"
+
+
+def _artifact_group(relative: Path) -> tuple[str, str, str]:
+    parts = relative.parts
+    if len(parts) >= 3 and parts[0] == "agent-runs":
+        return "agent-run", parts[1], "Agent governance runtime"
+    if len(parts) >= 3 and parts[0] == "factory-runs":
+        return "factory-run", parts[1], "Software factory runtime"
+    if parts and parts[0] == "private-beta":
+        return "control-plane", "private-beta", "Private beta control plane"
+    return "repository-proof", "latest", "Repository verification"
+
+
 def _risk_level(report: dict[str, Any], runs: list[dict[str, Any]]) -> str:
     status = str(report.get("final_status", "UNKNOWN"))
     if status in {"BLOCKED_BY_POLICY", "NOT_VERIFIED"}:
@@ -75,10 +110,17 @@ def _proof_metrics(report: dict[str, Any]) -> dict[str, Any]:
     checks = list(report.get("checks") or [])
     findings = list(report.get("security_findings") or [])
     mutations = list(report.get("mutations") or [])
-    statuses = Counter(str(item.get("status", "UNKNOWN")) for item in checks)
+    normalized_statuses = [
+        "SKIPPED" if str(item.get("status", "UNKNOWN")).upper() in {"SKIP", "SKIPPED", "NOT_APPLICABLE"}
+        else str(item.get("status", "UNKNOWN")).upper()
+        for item in checks
+    ]
+    statuses = Counter(normalized_statuses)
     levels = Counter(str(item.get("level", "UNKNOWN")).upper() for item in findings)
     killed = sum(1 for item in mutations if item.get("survived") is False)
     survived = sum(1 for item in mutations if item.get("survived") is True)
+    skipped = statuses.get("SKIPPED", 0)
+    applicable = max(0, len(checks) - skipped)
     return {
         "status": str(report.get("final_status", "UNKNOWN")),
         "score": int(report.get("score", 0) or 0),
@@ -88,12 +130,15 @@ def _proof_metrics(report: dict[str, Any]) -> dict[str, Any]:
         "sandbox_requested": str(report.get("sandbox_requested", "unknown")),
         "checks": {
             "total": len(checks),
+            "applicable": applicable,
             "passed": statuses.get("PASS", 0),
             "failed": statuses.get("FAIL", 0),
             "warnings": statuses.get("WARNING", 0),
             "weak": statuses.get("WEAK_PROOF", 0),
-            "skipped": statuses.get("SKIPPED", 0),
+            "skipped": skipped,
+            "not_applicable": skipped,
         },
+        "score_breakdown": list(report.get("score_breakdown") or []),
         "findings": {
             "total": len(findings),
             "high": levels.get("HIGH", 0),
@@ -149,8 +194,15 @@ class CommandCenterService:
     def private_beta_root(self) -> Path:
         return self.out_dir / "private-beta"
 
+    @property
+    def preview_state_root(self) -> Path:
+        return self.out_dir / "preview"
+
     def private_beta(self) -> PrivateBetaPlatform:
         return PrivateBetaPlatform(self.private_beta_root)
+
+    def preview_manager(self) -> StaticPreviewManager:
+        return StaticPreviewManager(self.repo, self.preview_state_root)
 
     def _config_and_excludes(self):
         config = load_config(self.repo)
@@ -173,31 +225,43 @@ class CommandCenterService:
         return list_factory_runs(self.repo, self.out_dir)
 
     def factory_transactions(self) -> list[dict[str, Any]]:
-        snapshot = StateCoordinator(self.factory_state_path).snapshot()
+        coordinator = StateCoordinator(self.factory_state_path)
+        snapshot = coordinator.snapshot()
+        current_version = int((snapshot.get("current") or {}).get("version", 0) or 0)
         factory_runs = {item.get("run_id"): item for item in self.recent_factory_runs()}
         rows: list[dict[str, Any]] = []
         for transaction in snapshot.get("transactions", []):
             run_id = str(transaction.get("run_id", ""))
-            run = factory_runs.get(run_id, {})
-            rows.append(
-                {
-                    "kind": "factory",
-                    "transaction_type": "FACTORY_STATE",
-                    "run_id": run_id,
-                    "task": str(transaction.get("summary") or run.get("product_name") or "Factory state transaction"),
-                    "status": str(transaction.get("status", "UNKNOWN")),
-                    "risk": "GOVERNED",
-                    "updated_at": str(transaction.get("finished_at") or transaction.get("created_at") or ""),
-                    "created_at": str(transaction.get("created_at") or ""),
-                    "base_version": int(transaction.get("base_version", 0) or 0),
-                    "result_version": transaction.get("result_version"),
-                    "product_name": str(run.get("product_name") or ""),
-                    "target_path": str(run.get("target_path") or ""),
-                    "proof_status": str(run.get("proof_status") or ""),
-                    "proof_score": int(run.get("proof_score", 0) or 0),
-                    "rollback_available": False,
-                }
+            is_rollback_record = ":rollback:" in run_id
+            source_run_id = run_id.split(":rollback:", 1)[0] if is_rollback_record else run_id
+            run = factory_runs.get(source_run_id, {})
+            run_status = str(run.get("status") or transaction.get("status", "UNKNOWN"))
+            rollback_available = (
+                not is_rollback_record
+                and run_status == "VERIFIED"
+                and int(transaction.get("result_version", -1) or -1) == current_version
             )
+            rows.append({
+                "kind": "factory",
+                "transaction_type": "FACTORY_ROLLBACK" if is_rollback_record else "FACTORY_STATE",
+                "run_id": source_run_id,
+                "ledger_id": run_id,
+                "task": str(transaction.get("summary") or run.get("product_name") or "Factory state transaction"),
+                "status": "ROLLED_BACK" if str(transaction.get("status")) == "ROLLED_BACK" else str(transaction.get("status", "UNKNOWN")),
+                "run_status": run_status,
+                "ledger_status": str(transaction.get("status", "UNKNOWN")),
+                "risk": "GOVERNED",
+                "updated_at": str(transaction.get("finished_at") or transaction.get("created_at") or ""),
+                "created_at": str(transaction.get("created_at") or ""),
+                "base_version": int(transaction.get("base_version", 0) or 0),
+                "result_version": transaction.get("result_version"),
+                "product_name": str(run.get("product_name") or ""),
+                "target_path": str(run.get("target_path") or ""),
+                "project_state_hash": str(run.get("project_state_hash") or ""),
+                "proof_status": str(run.get("proof_status") or ""),
+                "proof_score": int(run.get("proof_score", 0) or 0),
+                "rollback_available": rollback_available,
+            })
         return rows
 
     def governed_transactions(self) -> list[dict[str, Any]]:
@@ -213,93 +277,94 @@ class CommandCenterService:
         return rows
 
     def artifacts(self) -> list[dict[str, Any]]:
-        allowed_names = {
-            "proof-report.json",
-            "proof-report.md",
-            "basalt-patch-plan.md",
-            "basalt-dashboard.html",
-            "knowledge-graph.json",
-            "knowledge-graph.md",
-            "impact-analysis.json",
-            "impact-analysis.md",
-            "context-pack.json",
-            "context-pack.md",
-            "context-manifest.json",
-            "command-center-snapshot.json",
-            "basalt-design-tokens.json",
-            "basalt-design-system.md",
-            "design-system-audit.json",
+        """Return hash-addressed evidence with explicit provenance and mutability truth."""
+        allowed_top_level = {
+            "proof-report.json", "proof-report.md", "basalt-patch-plan.md", "github-pr-description.md",
+            "basalt-dashboard.html", "project-graph.json", "project-graph.md", "graph-manifest.json",
+            "impact-analysis.json", "impact-analysis.md", "context-pack.json", "context-pack.md",
+            "context-manifest.json", "command-center-snapshot.json", "basalt-design-tokens.json",
+            "basalt-design-system.md", "design-system-audit.json", "factory-manifest.json",
+            "architecture-snapshot.json", "operations-snapshot.json",
         }
-        results: list[dict[str, Any]] = []
-        for name in sorted(allowed_names):
+        candidates: set[Path] = set()
+        for name in allowed_top_level:
             path = self.out_dir / name
-            if not path.exists() or not path.is_file():
+            if path.is_file():
+                candidates.add(path)
+        for root_name in ("agent-runs", "factory-runs"):
+            root = self.out_dir / root_name
+            if not root.exists():
                 continue
-            results.append(
-                {
-                    "id": name,
-                    "name": name,
-                    "path": _safe_relative(path, self.repo),
-                    "size_bytes": path.stat().st_size,
-                    "modified_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
-                    "mime_type": mimetypes.guess_type(path.name)[0] or "text/plain",
-                }
+            for path in root.rglob("*"):
+                if (
+                    path.is_file()
+                    and path.suffix.lower() in {".json", ".md", ".patch", ".html", ".txt"}
+                    and path.stat().st_size <= MAX_ARTIFACT_BYTES
+                ):
+                    candidates.add(path)
+
+        results: list[dict[str, Any]] = []
+        for path in sorted(candidates, key=lambda item: (item.stat().st_mtime, item.as_posix()), reverse=True)[:300]:
+            relative_to_out = path.resolve().relative_to(self.out_dir)
+            group_type, group_id, origin = _artifact_group(relative_to_out)
+            digest = _sha256_file(path)
+            stat = path.stat()
+            stable_id = (
+                relative_to_out.name
+                if len(relative_to_out.parts) == 1
+                else f"artifact:{hashlib.sha256(relative_to_out.as_posix().encode()).hexdigest()[:24]}"
             )
-        run_root = self.out_dir / "agent-runs"
-        if run_root.exists():
-            for run_file in sorted(run_root.glob("*/run.json"), key=lambda item: item.stat().st_mtime, reverse=True)[:20]:
-                run_id = run_file.parent.name
-                results.append(
-                    {
-                        "id": f"run:{run_id}",
-                        "name": f"Agent run {run_id}",
-                        "path": _safe_relative(run_file, self.repo),
-                        "size_bytes": run_file.stat().st_size,
-                        "modified_at": datetime.fromtimestamp(run_file.stat().st_mtime, timezone.utc).isoformat(),
-                        "mime_type": "application/json",
-                    }
-                )
-        factory_root = self.out_dir / "factory-runs"
-        if factory_root.exists():
-            for run_file in sorted(factory_root.glob("*/run.json"), key=lambda item: item.stat().st_mtime, reverse=True)[:20]:
-                run_id = run_file.parent.name
-                results.append(
-                    {
-                        "id": f"factory:{run_id}",
-                        "name": f"Factory run {run_id}",
-                        "path": _safe_relative(run_file, self.repo),
-                        "size_bytes": run_file.stat().st_size,
-                        "modified_at": datetime.fromtimestamp(run_file.stat().st_mtime, timezone.utc).isoformat(),
-                        "mime_type": "application/json",
-                    }
-                )
+            results.append({
+                "id": stable_id,
+                "content_id": f"artifact:{hashlib.sha256(relative_to_out.as_posix().encode()).hexdigest()[:24]}",
+                "name": path.name,
+                "path": _safe_relative(path, self.repo),
+                "relative_evidence_path": relative_to_out.as_posix(),
+                "size_bytes": stat.st_size,
+                "created_at": datetime.fromtimestamp(stat.st_ctime, timezone.utc).isoformat(),
+                "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                "mime_type": mimetypes.guess_type(path.name)[0] or "text/plain",
+                "schema": _artifact_schema(path),
+                "sha256": digest,
+                "integrity": "HASH_TRACKED",
+                "immutable": False,
+                "mutability": "MUTABLE_LOCAL_EVIDENCE",
+                "group_type": group_type,
+                "group_id": group_id,
+                "origin": origin,
+            })
         return results
 
     def read_artifact(self, artifact_id: str) -> dict[str, Any]:
-        candidates: dict[str, Path] = {item["id"]: self.repo / item["path"] for item in self.artifacts()}
-        path = candidates.get(artifact_id)
-        if path is None or not path.exists():
+        items = self.artifacts()
+        metadata = next(
+            (
+                item for item in items
+                if artifact_id in {
+                    item["id"], item.get("content_id", ""), item.get("relative_evidence_path", "")
+                }
+            ),
+            None,
+        )
+        if metadata is None:
             raise FileNotFoundError("Artifact not found.")
-        resolved = path.resolve()
-        if self.out_dir not in resolved.parents and resolved != self.out_dir:
+        evidence_relative = str(metadata.get("relative_evidence_path") or "")
+        path = (self.out_dir / evidence_relative).resolve()
+        if not path.exists():
+            raise FileNotFoundError("Artifact not found.")
+        if self.out_dir not in path.parents and path != self.out_dir:
             raise PermissionError("Artifact is outside the Basalt evidence directory.")
-        size = resolved.stat().st_size
+        size = path.stat().st_size
         if size > MAX_ARTIFACT_BYTES:
             raise ValueError("Artifact is too large for inline viewing.")
-        text = resolved.read_text(encoding="utf-8", errors="replace")
+        text = path.read_text(encoding="utf-8", errors="replace")
         payload: Any = text
-        if resolved.suffix == ".json":
+        if path.suffix == ".json":
             try:
                 payload = json.loads(text)
             except json.JSONDecodeError:
                 payload = text
-        return {
-            "id": artifact_id,
-            "name": resolved.name,
-            "path": _safe_relative(resolved, self.repo),
-            "size_bytes": size,
-            "content": payload,
-        }
+        return {**metadata, "content": payload}
 
     def overview(self) -> dict[str, Any]:
         with self._lock:
@@ -350,7 +415,8 @@ class CommandCenterService:
             return {
                 "api_version": COMMAND_CENTER_API_VERSION,
                 "generated_at": _now(),
-                "platform": "Basalt v3.0 Production Candidate",
+                "platform": PRODUCT_NAME,
+                "release": release_metadata(),
                 "project": {
                     "name": project_name,
                     "path": str(self.repo),
@@ -364,7 +430,7 @@ class CommandCenterService:
                     "graph_fresh": bool(graph.fresh),
                     "last_verified_at": str(report.get("finished_at", "")),
                     "intent": "Plan, build, prove, and safely evolve software through governed factory transactions.",
-                    "current_phase": "Production Basalt v1",
+                    "current_phase": PHASE_NAME,
                 },
                 "proof": _proof_metrics(report),
                 "graph": _graph_metrics(graph),
@@ -403,11 +469,64 @@ class CommandCenterService:
     def run_detail(self, run_id: str) -> dict[str, Any]:
         run, run_dir = load_agent_run(self.repo, run_id, self.out_dir)
         data = run.to_dict()
-        data["artifact_files"] = [
-            _safe_relative(path, self.repo)
-            for path in sorted(run_dir.iterdir())
-            if path.is_file()
-        ]
+
+        def read_run_json(name: str, default: Any) -> Any:
+            path = run_dir / name
+            return _read_json(path, default)
+
+        patch_text = ""
+        candidate = Path(run.candidate_patch_path) if run.candidate_patch_path else None
+        if candidate and candidate.exists() and run_dir in candidate.resolve().parents:
+            patch_text = candidate.read_text(encoding="utf-8", errors="replace")[:MAX_ARTIFACT_BYTES]
+
+        policy = data.get("policy_decision") or {}
+        patch_stats = policy.get("patch_stats") or {}
+        transaction = read_run_json("state-transaction.json", {})
+        proposal = read_run_json("patch-proposal.json", {})
+        verification_delta = read_run_json("verification-delta.json", None)
+        approval = data.get("approval") or {}
+        run_artifacts = [item for item in self.artifacts() if item.get("group_type") == "agent-run" and item.get("group_id") == run_id]
+
+        data.update({
+            "patch_preview": patch_text,
+            "patch_scope": {
+                "files": list(patch_stats.get("paths") or []),
+                "files_changed": int(patch_stats.get("files_changed", 0) or 0),
+                "additions": int(patch_stats.get("additions", 0) or 0),
+                "deletions": int(patch_stats.get("deletions", 0) or 0),
+                "changed_lines": int(patch_stats.get("changed_lines", 0) or 0),
+            },
+            "impact_radius": {
+                "files": list(run.impacted_files),
+                "tests": list(run.impacted_tests),
+                "features": list(run.impacted_features),
+            },
+            "decision_context": {
+                "risk": policy.get("risk_level", "UNKNOWN"),
+                "policy_verdict": policy.get("verdict", "UNKNOWN"),
+                "policy_reasons": list(policy.get("reasons") or []),
+                "risk_flags": list(policy.get("risk_flags") or []),
+                "required_approvals": list(policy.get("required_approvals") or []),
+                "required_locks": list(policy.get("required_locks") or []),
+                "base_state_hash": run.base_state_hash,
+                "proposal_source": run.proposal_source,
+                "created_at": run.created_at,
+                "proposer": run.agent_role,
+                "approval": approval,
+                "proof_before": run.before_report_path,
+            },
+            "proposal": proposal,
+            "transaction_provenance": transaction,
+            "verification_delta_evidence": verification_delta,
+            "evidence": run_artifacts,
+            "rollback": {
+                "eligible": run.status.value == "VERIFIED",
+                "performed": bool(run.rollback_performed),
+                "backup_dir": _safe_relative(Path(run.backup_dir), self.repo) if run.backup_dir else "",
+                "restored_hash": transaction.get("restored_state", "") if isinstance(transaction, dict) else "",
+            },
+            "artifact_files": [item["path"] for item in run_artifacts],
+        })
         return data
 
     def impact(self, target: str, depth: int = 3) -> dict[str, Any]:
@@ -453,11 +572,69 @@ class CommandCenterService:
             data["artifacts"] = [str(item) for item in artifacts]
             return data
 
+    def architecture(self) -> dict[str, Any]:
+        with self._lock:
+            graph = self.ensure_graph()
+            data = architecture_snapshot(self.repo, graph)
+            (self.out_dir / "architecture-snapshot.json").write_text(
+                json.dumps(data, indent=2, sort_keys=False), encoding="utf-8"
+            )
+            return data
+
+    def preview_state(self) -> dict[str, Any]:
+        return self.preview_manager().snapshot()
+
+    def preview_start(self, actor: str) -> dict[str, Any]:
+        return self.preview_manager().start(actor)
+
+    def preview_stop(self, actor: str) -> dict[str, Any]:
+        return self.preview_manager().stop(actor)
+
+    def operations(self) -> dict[str, Any]:
+        graph = self.ensure_graph()
+        data = operations_snapshot(
+            self.proof_report(),
+            _graph_metrics(graph),
+            self.governed_transactions(),
+            self.beta_state(),
+            self.preview_state(),
+        )
+        (self.out_dir / "operations-snapshot.json").write_text(
+            json.dumps(data, indent=2, sort_keys=False), encoding="utf-8"
+        )
+        return data
+
     def factory_runs(self) -> list[dict[str, Any]]:
         return self.recent_factory_runs()
 
     def factory_run_detail(self, run_id: str) -> dict[str, Any]:
-        return load_factory_run(self.repo, run_id, self.out_dir).to_dict()
+        run = load_factory_run(self.repo, run_id, self.out_dir)
+        data = run.to_dict()
+        run_dir = self.out_dir / "factory-runs" / run_id
+        rollback_record = _read_json(run_dir / "rollback.json", None)
+        transactions = [
+            item for item in StateCoordinator(self.factory_state_path).snapshot().get("transactions", [])
+            if str(item.get("run_id", "")).startswith(run_id)
+        ]
+        evidence = [
+            item for item in self.artifacts()
+            if item.get("group_type") == "factory-run" and item.get("group_id") == run_id
+        ]
+        data.update({
+            "state_transactions": transactions,
+            "rollback": {
+                "eligible": run.status.value == "VERIFIED"
+                and StateCoordinator(self.factory_state_path).current().version == run.committed_state_version,
+                "performed": run.status.value == "ROLLED_BACK",
+                "record": rollback_record,
+            },
+            "evidence": evidence,
+            "execution_truth": {
+                "mode": "DETERMINISTIC_LOCAL",
+                "claim": "Dependency-ordered local materialisation with accountable specialist contracts; no remote autonomous execution is claimed.",
+            },
+        })
+        return data
 
     def factory_state(self) -> dict[str, Any]:
         return factory_snapshot(self.repo, self.out_dir)
@@ -496,6 +673,16 @@ class CommandCenterService:
                 run_id,
                 target,
                 sandbox=sandbox,
+                out_dir=self.out_dir,
+            ).to_dict()
+
+    def factory_rollback(self, run_id: str, actor: str, reason: str) -> dict[str, Any]:
+        with self._lock:
+            return rollback_factory_run(
+                self.repo,
+                run_id.strip(),
+                actor.strip(),
+                reason.strip(),
                 out_dir=self.out_dir,
             ).to_dict()
 

@@ -1,3 +1,14 @@
+## 3.0.0rc4 — Phase 7 Hardening and Product Truth
+
+- Centralized active RC4 identity and corrected stale private-beta branding.
+- Corrected applicable, skipped, and not-applicable proof counts and added score breakdown.
+- Added workspace continuity, exact diagnostic navigation, command availability truth, and richer read-only Git review.
+- Added complete approval context, patch-versus-impact labels, transaction synchronization, provenance, evidence grouping, and rollback UX.
+- Added source-derived architecture/API/database canvases, safe static preview, local operations, and append-only factory rollback.
+- Made factory specialist records explicitly deterministic, dependency-ordered, and non-contradictory.
+- Added 14 RC4 regression tests; full suite now passes 224 tests and the critical matrix passes 103 tests.
+- Self-verification remains VERIFIED at 98/100.
+
 ## 3.0.0rc3 — Professional Engineering Workspace
 
 - Adds multi-file tabs, line numbers, local syntax highlighting, cursor metadata, and keyboard shortcuts.

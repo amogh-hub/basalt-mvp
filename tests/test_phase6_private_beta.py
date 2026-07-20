@@ -714,7 +714,7 @@ class Phase6CommandCenterTests(unittest.TestCase):
             self.assertEqual(factory_rows[0]["base_version"], 0)
             self.assertEqual(factory_rows[0]["result_version"], 1)
             self.assertEqual(factory_rows[0]["run_id"], run["run_id"])
-            self.assertFalse(factory_rows[0]["rollback_available"])
+            self.assertTrue(factory_rows[0]["rollback_available"])
 
     def test_brand_asset_is_served(self):
         with tempfile.TemporaryDirectory() as td:

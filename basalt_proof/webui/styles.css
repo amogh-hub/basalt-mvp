@@ -167,3 +167,30 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
 @media (prefers-color-scheme: light) {
   .brand { color: #08090b; }
 }
+
+/* RC4 governance detail, evidence provenance, and accessibility hardening */
+.skip-link { position: fixed; left: 12px; top: 10px; z-index: 1000; transform: translateY(-160%); padding: 10px 14px; border-radius: 9px; background: var(--text); color: #080b0e; font-weight: 800; text-decoration: none; }
+.skip-link:focus { transform: translateY(0); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.transaction-diff { grid-column: 1 / -1; max-width: 100%; max-height: 520px; overflow: auto; margin: 10px 0 0; padding: 14px; border: 1px solid var(--line-soft); border-radius: 11px; background: #080b0e; color: #cbd4de; font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; tab-size: 2; }
+.evidence-detail, .approval-evidence { grid-column: 1 / -1; border: 1px solid var(--line-soft); border-radius: 11px; padding: 12px 14px; background: rgba(10, 13, 17, .72); }
+.evidence-detail > summary, .approval-evidence > summary { cursor: pointer; color: #d5dbe2; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
+.evidence-list { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-size: 10px; line-height: 1.7; }
+.compact-detail { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.approval-evidence { margin-top: 14px; }
+.artifact-group-heading { margin: 18px 0 5px; padding-bottom: 7px; border-bottom: 1px solid var(--line-soft); color: var(--faint); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.artifact-group-heading:first-child { margin-top: 0; }
+button.artifact-item { width: 100%; color: inherit; text-align: left; font: inherit; }
+.operation-grid, .architecture-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.architecture-card, .operation-card { min-width: 0; border: 1px solid var(--line-soft); border-radius: 12px; padding: 14px; background: var(--panel-2); }
+.architecture-card h3, .operation-card h3 { margin-bottom: 8px; }
+.architecture-card ul, .operation-card ul { margin: 0; padding-left: 17px; color: var(--muted); font-size: 10px; line-height: 1.65; }
+.architecture-card code { word-break: break-word; }
+.preview-frame { width: 100%; min-height: 520px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.truth-note { grid-column: 1 / -1; padding: 12px 14px; border-left: 2px solid var(--accent); background: rgba(113,133,155,.06); color: var(--muted); font-size: 10px; line-height: 1.6; }
+.incident-card { border-left: 2px solid var(--warn); }
+.incident-card.high { border-left-color: var(--bad); }
+.status-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 900px) { .architecture-grid, .operation-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .architecture-grid, .operation-grid, .compact-detail { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; } }
