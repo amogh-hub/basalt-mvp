@@ -28,7 +28,7 @@ RC4 converts the accepted RC3 workspace into a substantially more truthful and c
 - append-only factory-state rollback with quarantine and restored-state evidence;
 - release metadata module as the active identity source;
 - accessibility foundations including skip navigation, live status, focus visibility, and reduced motion;
-- 14 RC4 regression tests.
+- 14 original RC4 hardening tests plus 8 acceptance-remediation tests.
 
 ## Validation
 

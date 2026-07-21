@@ -296,7 +296,10 @@ def create_command_center_server(
                     return
                 parts = self._route_parts()
                 if len(parts) == 5 and parts[:4] == ["api", "v1", "artifacts", "content"]:
-                    self._send_json(HTTPStatus.OK, service.read_artifact(parts[4]))
+                    query = parse_qs(parsed.query)
+                    offset = int((query.get("offset") or [0])[0])
+                    limit = int((query.get("limit") or [200000])[0])
+                    self._send_json(HTTPStatus.OK, service.read_artifact(parts[4], offset=offset, limit=limit))
                     return
                 if path == "/api/v1/runs":
                     self._send_json(HTTPStatus.OK, {"items": service.recent_runs()})
@@ -457,6 +460,12 @@ def create_command_center_server(
                     elif parts[5] == "rollback":
                         result = service.factory_rollback(
                             parts[4], str(data.get("actor", "")), str(data.get("reason", ""))
+                        )
+                    elif parts[5] == "register":
+                        result = service.factory_register(parts[4], str(data.get("actor", "Local user")))
+                    elif parts[5] == "package":
+                        result = service.factory_package(
+                            parts[4], str(data.get("actor", "Local user")), str(data.get("environment", "staging"))
                         )
                     else:
                         self._error(HTTPStatus.NOT_FOUND, "NOT_FOUND", "Unknown factory run action.")

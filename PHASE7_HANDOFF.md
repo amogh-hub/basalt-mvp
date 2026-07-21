@@ -4,19 +4,20 @@ Version: `3.0.0rc4`
 
 ## Handoff status
 
-RC4 is the hardened Phase 7 local source candidate. It preserves the accepted RC3 baseline and implements the RC4 correction ledger plus the remaining local Phase 7 product surfaces: architecture/API/database truth, safe static preview, richer read-only Git review, local control-plane visibility, operations/recovery state, evidence provenance, dependency-truthful factory records, and append-only factory rollback.
+RC4 is the hardened and acceptance-remediated Phase 7 local source candidate. It preserves the accepted RC3 baseline and implements the RC4 correction ledger plus the remaining local Phase 7 product surfaces: architecture/API/database truth, safe static preview, richer read-only Git review, local control-plane visibility, operations/recovery state, evidence provenance, dependency-truthful factory records, and append-only factory rollback.
 
 ## Automated acceptance
 
-- full suite: **224 tests passed**
+- full suite: **232 tests passed**
 - critical proof matrix: **103 tests passed**
 - repository self-verification: **VERIFIED, 98/100**
 - Python compilation: **PASS**
 - Command Center JavaScript syntax: **PASS**
 - Workspace JavaScript syntax: **PASS**
-- HTTP/API authorization and lifecycle tests: **PASS**
+- HTTP/API authorization and complete Factory → Control Plane → approval → promote → rollback lifecycle tests: **PASS**
+- 33-item visual acceptance remediation ledger: **CLOSED IN SOURCE**
 
-Docker was unavailable in the delivery environment. Headless Chromium navigation was blocked by the environment administrator, so final visual browser revalidation must run on the project Mac before publishing RC4.
+Docker was unavailable in the delivery environment. The delivery environment does not provide the target Mac browser, so the installer performs all automated gates and launches the repaired Command Center for one final visual smoke before publishing RC4.
 
 ## Run
 

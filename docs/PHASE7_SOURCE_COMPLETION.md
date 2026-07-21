@@ -10,6 +10,6 @@ Basalt `3.0.0rc4` contains the completed local Phase 7 product-source scope:
 - append-only agent and factory rollback;
 - regression coverage for the RC3 acceptance defect ledger.
 
-Automated evidence: 224 tests pass, 103 critical proof-matrix tests pass, and self-verification is VERIFIED 98/100.
+Automated evidence: 232 tests pass, 103 critical proof-matrix tests pass, and self-verification is VERIFIED 98/100. The 33-item browser-acceptance remediation ledger is closed in source.
 
 This record does not convert environment-dependent external infrastructure into completed production services. GitHub release publication remains blocked until the RC4 installer and browser acceptance pass on the project Mac.

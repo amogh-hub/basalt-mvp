@@ -1,12 +1,21 @@
 ## 3.0.0rc4 — Phase 7 Hardening and Product Truth
 
+### Acceptance remediation
+
+- Closed all 33 browser-acceptance defects across workspace truth, proof provenance, evidence viewing, planning/routing transparency, Factory-to-Control-Plane continuity, approvals, transactions, and rollback state.
+- Added idempotent VERIFIED Factory registration and staging packaging with explicit approval, promote, and rollback gates.
+- Replaced misleading compile-only lint semantics with a named syntax check and a dependency-free repository quality check.
+- Added exact proof project-state identity, Git tracking disclosure, inspectable Activity events, chunked evidence, and reproducible context manifests.
+- Added 8 dedicated acceptance-remediation tests; full suite now contains 232 tests and the critical matrix contains 103 tests.
+- Preserved `3.0.0rc4`, the RC3 rollback baseline, local-only execution truth, and the no-tag/no-push release rule.
+
 - Centralized active RC4 identity and corrected stale private-beta branding.
 - Corrected applicable, skipped, and not-applicable proof counts and added score breakdown.
 - Added workspace continuity, exact diagnostic navigation, command availability truth, and richer read-only Git review.
 - Added complete approval context, patch-versus-impact labels, transaction synchronization, provenance, evidence grouping, and rollback UX.
 - Added source-derived architecture/API/database canvases, safe static preview, local operations, and append-only factory rollback.
 - Made factory specialist records explicitly deterministic, dependency-ordered, and non-contradictory.
-- Added 14 RC4 regression tests; full suite now passes 224 tests and the critical matrix passes 103 tests.
+- Added 14 original RC4 hardening tests plus 8 acceptance-remediation tests; full suite now passes 232 tests and the critical matrix passes 103 tests.
 - Self-verification remains VERIFIED at 98/100.
 
 ## 3.0.0rc3 — Professional Engineering Workspace

@@ -43,7 +43,7 @@
     <section class="editor-shell">
       <div id="file-tabs" class="file-tabs" role="tablist" aria-label="Open files"></div>
       <div class="editor-toolbar">
-        <div class="breadcrumbs" id="breadcrumbs">Select a file from the repository</div>
+        <div><div class="breadcrumbs" id="breadcrumbs">Select a file from the repository</div><div id="git-file-state" class="file-truth hidden"></div></div>
         <div class="editor-actions">
           <button id="reload-file" class="quiet-button" type="button" disabled>Reload</button>
           <button id="review-diff" class="quiet-button" type="button" disabled>Review diff</button>
@@ -72,7 +72,7 @@
           <span id="diagnostics-dot" class="diagnostics-dot"></span>
           <span id="diagnostics-label">No file selected</span>
         </button>
-        <span id="file-meta">UTF-8</span>
+        <span id="file-meta">No document</span>
       </div>
     </section>
 
@@ -120,7 +120,7 @@
 
   <footer>
     <div class="footer-left"><span class="footer-brand">Proof before trust</span><span id="footer-path">No file selected</span></div>
-    <div class="footer-right"><span id="cursor-position">Ln 1, Col 1</span><span id="footer-language">Plain Text</span><span>UTF-8</span></div>
+    <div class="footer-right"><span id="cursor-position">No cursor</span><span id="footer-language">No document</span><span id="footer-encoding">—</span></div>
   </footer>
 </div>
 
@@ -146,6 +146,16 @@
   <form method="dialog" class="dialog-card" id="diagnostics-form">
     <div class="dialog-heading"><div><p class="eyebrow">CURRENT FILE</p><h2>Diagnostics</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
     <div id="diagnostics-list" class="diagnostics-list"></div>
+    <div class="dialog-actions"><button class="quiet-button" value="cancel">Close</button></div>
+  </form>
+</dialog>
+
+
+<dialog id="activity-dialog" class="workspace-dialog">
+  <form method="dialog" class="dialog-card wide">
+    <div class="dialog-heading"><div><p class="eyebrow">WORKSPACE EVENT</p><h2 id="activity-detail-title">Event detail</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+    <div id="activity-detail" class="event-detail-grid"></div>
+    <pre id="activity-detail-output" class="diff-output hidden"></pre>
     <div class="dialog-actions"><button class="quiet-button" value="cancel">Close</button></div>
   </form>
 </dialog>

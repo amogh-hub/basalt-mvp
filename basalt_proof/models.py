@@ -195,7 +195,14 @@ class ContextPack:
     constraints: list[str] = field(default_factory=list)
     freshness: dict[str, Any] = field(default_factory=dict)
     selection_reasons: list[dict[str, Any]] = field(default_factory=list)
+    omitted_candidates: list[dict[str, Any]] = field(default_factory=list)
+    token_allocation: list[dict[str, Any]] = field(default_factory=list)
+    budget_status: str = "AVAILABLE"
+    truncated: bool = False
     context_precision_score: float = 0.0
+    context_precision_explanation: str = ""
+    manifest_hash: str = ""
+    selection_rule_version: str = "context-compiler-v2.2"
 
 
 @dataclass
@@ -379,6 +386,7 @@ class ProofReport:
     sandbox_requested: str = "temp"
     sandbox_fallback_reason: str | None = None
     project_type: str = "unknown"
+    project_state_hash: str = ""
     checks: list[CommandResult] = field(default_factory=list)
     security_findings: list[SecurityFinding] = field(default_factory=list)
     mutations: list[MutationResult] = field(default_factory=list)

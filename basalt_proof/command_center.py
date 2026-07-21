@@ -44,6 +44,8 @@ from .release import PHASE, PHASE_NAME, PRODUCT_NAME, RELEASE_CHANNEL, VERSION, 
 
 COMMAND_CENTER_API_VERSION = "v1"
 MAX_ARTIFACT_BYTES = 2_000_000
+DEFAULT_ARTIFACT_CHUNK_BYTES = 200_000
+MAX_ARTIFACT_CHUNK_BYTES = 500_000
 
 
 def _now() -> str:
@@ -91,7 +93,7 @@ def _artifact_group(relative: Path) -> tuple[str, str, str]:
     if len(parts) >= 3 and parts[0] == "factory-runs":
         return "factory-run", parts[1], "Software factory runtime"
     if parts and parts[0] == "private-beta":
-        return "control-plane", "private-beta", "Private beta control plane"
+        return "control-plane", "local", "Local organization control plane"
     return "repository-proof", "latest", "Repository verification"
 
 
@@ -110,24 +112,31 @@ def _proof_metrics(report: dict[str, Any]) -> dict[str, Any]:
     checks = list(report.get("checks") or [])
     findings = list(report.get("security_findings") or [])
     mutations = list(report.get("mutations") or [])
-    normalized_statuses = [
-        "SKIPPED" if str(item.get("status", "UNKNOWN")).upper() in {"SKIP", "SKIPPED", "NOT_APPLICABLE"}
-        else str(item.get("status", "UNKNOWN")).upper()
-        for item in checks
-    ]
-    statuses = Counter(normalized_statuses)
+    statuses = Counter()
+    for item in checks:
+        raw = str(item.get("status", "UNKNOWN")).upper()
+        canonical = "NOT_APPLICABLE" if raw in {"SKIP", "SKIPPED", "NOT_APPLICABLE"} else raw
+        statuses[canonical] += 1
     levels = Counter(str(item.get("level", "UNKNOWN")).upper() for item in findings)
     killed = sum(1 for item in mutations if item.get("survived") is False)
     survived = sum(1 for item in mutations if item.get("survived") is True)
-    skipped = statuses.get("SKIPPED", 0)
-    applicable = max(0, len(checks) - skipped)
+    not_applicable = statuses.get("NOT_APPLICABLE", 0)
+    applicable = max(0, len(checks) - not_applicable)
+    repository_state_hash = str(
+        report.get("repository_state_hash")
+        or report.get("project_state_hash")
+        or report.get("state_hash")
+        or ""
+    )
     return {
         "status": str(report.get("final_status", "UNKNOWN")),
         "score": int(report.get("score", 0) or 0),
         "started_at": str(report.get("started_at", "")),
         "finished_at": str(report.get("finished_at", "")),
+        "repository_state_hash": repository_state_hash,
         "sandbox": str(report.get("sandbox", "unknown")),
         "sandbox_requested": str(report.get("sandbox_requested", "unknown")),
+        "sandbox_fallback_reason": str(report.get("sandbox_fallback_reason", "")),
         "checks": {
             "total": len(checks),
             "applicable": applicable,
@@ -135,8 +144,9 @@ def _proof_metrics(report: dict[str, Any]) -> dict[str, Any]:
             "failed": statuses.get("FAIL", 0),
             "warnings": statuses.get("WARNING", 0),
             "weak": statuses.get("WEAK_PROOF", 0),
-            "skipped": skipped,
-            "not_applicable": skipped,
+            "not_applicable": not_applicable,
+            # Backward-compatible alias. New UI uses not_applicable.
+            "skipped": not_applicable,
         },
         "score_breakdown": list(report.get("score_breakdown") or []),
         "findings": {
@@ -276,6 +286,32 @@ class CommandCenterService:
         rows.sort(key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""), reverse=True)
         return rows
 
+    def _factory_control_plane_link(self, run_id: str) -> dict[str, Any]:
+        return _read_json(self.out_dir / "factory-runs" / run_id / "control-plane.json", {})
+
+    def _factory_artifact_context(self, run_id: str) -> dict[str, Any]:
+        try:
+            run = load_factory_run(self.repo, run_id, self.out_dir)
+        except (FileNotFoundError, ValueError):
+            return {}
+        transactions = [
+            item for item in StateCoordinator(self.factory_state_path).snapshot().get("transactions", [])
+            if str(item.get("run_id", "")).startswith(run_id)
+        ]
+        latest_transaction = transactions[-1] if transactions else {}
+        return {
+            "factory_run_id": run.run_id,
+            "product_name": run.product_name,
+            "factory_status": run.status.value,
+            "output_state_hash": run.project_state_hash,
+            "target_path": run.target_path,
+            "proof_status": run.proof_status,
+            "proof_score": run.proof_score,
+            "transaction_run_id": str(latest_transaction.get("run_id", "")),
+            "transaction_status": str(latest_transaction.get("status", "")),
+            "control_plane": self._factory_control_plane_link(run_id),
+        }
+
     def artifacts(self) -> list[dict[str, Any]]:
         """Return hash-addressed evidence with explicit provenance and mutability truth."""
         allowed_top_level = {
@@ -296,15 +332,12 @@ class CommandCenterService:
             if not root.exists():
                 continue
             for path in root.rglob("*"):
-                if (
-                    path.is_file()
-                    and path.suffix.lower() in {".json", ".md", ".patch", ".html", ".txt"}
-                    and path.stat().st_size <= MAX_ARTIFACT_BYTES
-                ):
+                if path.is_file() and path.suffix.lower() in {".json", ".md", ".patch", ".html", ".txt"}:
                     candidates.add(path)
 
         results: list[dict[str, Any]] = []
-        for path in sorted(candidates, key=lambda item: (item.stat().st_mtime, item.as_posix()), reverse=True)[:300]:
+        factory_context_cache: dict[str, dict[str, Any]] = {}
+        for path in sorted(candidates, key=lambda item: (item.stat().st_mtime, item.as_posix()), reverse=True)[:500]:
             relative_to_out = path.resolve().relative_to(self.out_dir)
             group_type, group_id, origin = _artifact_group(relative_to_out)
             digest = _sha256_file(path)
@@ -314,6 +347,9 @@ class CommandCenterService:
                 if len(relative_to_out.parts) == 1
                 else f"artifact:{hashlib.sha256(relative_to_out.as_posix().encode()).hexdigest()[:24]}"
             )
+            provenance: dict[str, Any] = {}
+            if group_type == "factory-run":
+                provenance = factory_context_cache.setdefault(group_id, self._factory_artifact_context(group_id))
             results.append({
                 "id": stable_id,
                 "content_id": f"artifact:{hashlib.sha256(relative_to_out.as_posix().encode()).hexdigest()[:24]}",
@@ -321,6 +357,8 @@ class CommandCenterService:
                 "path": _safe_relative(path, self.repo),
                 "relative_evidence_path": relative_to_out.as_posix(),
                 "size_bytes": stat.st_size,
+                "inline_preview": stat.st_size <= MAX_ARTIFACT_BYTES,
+                "chunked_preview": stat.st_size > MAX_ARTIFACT_BYTES,
                 "created_at": datetime.fromtimestamp(stat.st_ctime, timezone.utc).isoformat(),
                 "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
                 "mime_type": mimetypes.guess_type(path.name)[0] or "text/plain",
@@ -332,17 +370,21 @@ class CommandCenterService:
                 "group_type": group_type,
                 "group_id": group_id,
                 "origin": origin,
+                "provenance": provenance,
             })
         return results
 
-    def read_artifact(self, artifact_id: str) -> dict[str, Any]:
+    def read_artifact(
+        self,
+        artifact_id: str,
+        offset: int = 0,
+        limit: int = DEFAULT_ARTIFACT_CHUNK_BYTES,
+    ) -> dict[str, Any]:
         items = self.artifacts()
         metadata = next(
             (
                 item for item in items
-                if artifact_id in {
-                    item["id"], item.get("content_id", ""), item.get("relative_evidence_path", "")
-                }
+                if artifact_id in {item["id"], item.get("content_id", ""), item.get("relative_evidence_path", "")}
             ),
             None,
         )
@@ -355,16 +397,29 @@ class CommandCenterService:
         if self.out_dir not in path.parents and path != self.out_dir:
             raise PermissionError("Artifact is outside the Basalt evidence directory.")
         size = path.stat().st_size
-        if size > MAX_ARTIFACT_BYTES:
-            raise ValueError("Artifact is too large for inline viewing.")
-        text = path.read_text(encoding="utf-8", errors="replace")
+        selected_offset = max(0, min(int(offset), size))
+        selected_limit = max(1, min(int(limit), MAX_ARTIFACT_CHUNK_BYTES))
+        with path.open("rb") as handle:
+            handle.seek(selected_offset)
+            raw = handle.read(selected_limit)
+        text = raw.decode("utf-8", errors="replace")
+        complete = selected_offset == 0 and len(raw) >= size
         payload: Any = text
-        if path.suffix == ".json":
+        if path.suffix == ".json" and complete:
             try:
                 payload = json.loads(text)
             except json.JSONDecodeError:
                 payload = text
-        return {**metadata, "content": payload}
+        next_offset = selected_offset + len(raw)
+        return {
+            **metadata,
+            "content": payload,
+            "content_offset": selected_offset,
+            "content_bytes": len(raw),
+            "truncated": next_offset < size,
+            "next_offset": next_offset if next_offset < size else None,
+            "remaining_bytes": max(0, size - next_offset),
+        }
 
     def overview(self) -> dict[str, Any]:
         with self._lock:
@@ -460,7 +515,7 @@ class CommandCenterService:
                     {"phase": 3, "name": "Agent-Assisted Safe Fixes", "status": "COMPLETE"},
                     {"phase": 4, "name": "Command Center Web App", "status": "COMPLETE"},
                     {"phase": 5, "name": "Alpha AI Software Factory", "status": "COMPLETE"},
-                    {"phase": 6, "name": "Private Beta Full Build System", "status": "COMPLETE"},
+                    {"phase": 6, "name": "Persistent Control Plane", "status": "COMPLETE"},
                     {"phase": 7, "name": "Production Basalt v1", "status": "ACTIVE"},
                     {"phase": 8, "name": "Full Basalt Final Vision", "status": "UPCOMING"},
                 ],
@@ -620,14 +675,21 @@ class CommandCenterService:
             item for item in self.artifacts()
             if item.get("group_type") == "factory-run" and item.get("group_id") == run_id
         ]
+        current_state = StateCoordinator(self.factory_state_path).current()
+        control_plane = self._factory_control_plane_link(run_id)
         data.update({
             "state_transactions": transactions,
+            "transaction_state": str((transactions[-1] if transactions else {}).get("status", run.status.value)),
             "rollback": {
-                "eligible": run.status.value == "VERIFIED"
-                and StateCoordinator(self.factory_state_path).current().version == run.committed_state_version,
+                "eligible": run.status.value == "VERIFIED" and current_state.version == run.committed_state_version,
                 "performed": run.status.value == "ROLLED_BACK",
                 "record": rollback_record,
+                "restored_state_hash": str((rollback_record or {}).get("restored_state_hash", "")),
+                "quarantine_path": str((rollback_record or {}).get("quarantine_path", "")),
+                "target_active": run.status.value == "VERIFIED" and Path(run.target_path).exists(),
             },
+            "current_factory_state": {"version": current_state.version, "state_hash": current_state.state_hash},
+            "control_plane": control_plane,
             "evidence": evidence,
             "execution_truth": {
                 "mode": "DETERMINISTIC_LOCAL",
@@ -677,6 +739,8 @@ class CommandCenterService:
             ).to_dict()
 
     def factory_rollback(self, run_id: str, actor: str, reason: str) -> dict[str, Any]:
+        if not run_id.strip() or not actor.strip() or not reason.strip():
+            raise ValueError("Factory run ID, actor, and rollback reason are required.")
         with self._lock:
             return rollback_factory_run(
                 self.repo,
@@ -685,6 +749,110 @@ class CommandCenterService:
                 reason.strip(),
                 out_dir=self.out_dir,
             ).to_dict()
+
+    def factory_register(self, run_id: str, actor: str = "Local user") -> dict[str, Any]:
+        if not run_id.strip() or not actor.strip():
+            raise ValueError("Factory run ID and actor are required.")
+        with self._lock:
+            run = load_factory_run(self.repo, run_id.strip(), self.out_dir)
+            if run.status.value != "VERIFIED":
+                raise ValueError("Only a VERIFIED Factory output may be registered in Control Plane.")
+            target = Path(run.target_path).expanduser().resolve()
+            if not target.exists() or not target.is_dir():
+                raise ValueError("Verified Factory target is unavailable; it may have been rolled back.")
+            link_path = self.out_dir / "factory-runs" / run.run_id / "control-plane.json"
+            existing = _read_json(link_path, {})
+            if existing.get("project_id"):
+                return existing
+            platform = self.private_beta()
+            bootstrap = platform.bootstrap("local@basalt.invalid", actor.strip(), "Basalt Local")
+            user_id = str(bootstrap["user"]["user_id"])
+            team_id = str(bootstrap["team"]["team_id"])
+            project = platform.add_project(
+                team_id,
+                run.product_name,
+                target,
+                user_id,
+                template=run.template,
+                privacy_mode="local",
+            )
+            link = {
+                "factory_run_id": run.run_id,
+                "project_id": project["project_id"],
+                "team_id": team_id,
+                "user_id": user_id,
+                "registered_by": actor.strip(),
+                "registered_at": _now(),
+                "target_path": str(target),
+                "output_state_hash": run.project_state_hash,
+                "proof_status": run.proof_status,
+                "proof_score": run.proof_score,
+            }
+            link_path.write_text(json.dumps(link, indent=2, sort_keys=False), encoding="utf-8")
+            platform.registry.record_activity(
+                team_id,
+                project["project_id"],
+                user_id,
+                "FACTORY_OUTPUT_REGISTERED",
+                f"Registered verified Factory run {run.run_id}.",
+                link,
+            )
+            return link
+
+    def factory_package(
+        self,
+        run_id: str,
+        actor: str = "Local user",
+        environment: str = "staging",
+    ) -> dict[str, Any]:
+        if not run_id.strip() or not actor.strip():
+            raise ValueError("Factory run ID and actor are required.")
+        with self._lock:
+            run = load_factory_run(self.repo, run_id.strip(), self.out_dir)
+            if run.status.value != "VERIFIED":
+                raise ValueError("Only a VERIFIED Factory output may be packaged.")
+            link = self.factory_register(run.run_id, actor)
+            platform = self.private_beta()
+            existing_deployment_id = str(link.get("deployment_id", ""))
+            if existing_deployment_id:
+                try:
+                    existing_record = platform.deployments.get(existing_deployment_id)
+                except Exception:
+                    existing_record = None
+                if existing_record is not None and existing_record.status.value != "ROLLED_BACK":
+                    return {"control_plane": link, "deployment": existing_record.to_dict(), "idempotent": True}
+            proof_path = Path(run.proof_report_path).expanduser().resolve()
+            target = Path(run.target_path).expanduser().resolve()
+            record = platform.deployments.package_verified_product(
+                str(link["project_id"]),
+                target,
+                proof_path,
+                environment,
+                str(link["user_id"]),
+                metadata={
+                    "factory_run_id": run.run_id,
+                    "product_name": run.product_name,
+                    "output_state_hash": run.project_state_hash,
+                    "factory_transaction": next(
+                        (
+                            str(item.get("run_id", ""))
+                            for item in self.factory_transactions()
+                            if item.get("run_id") == run.run_id
+                        ),
+                        run.run_id,
+                    ),
+                },
+            )
+            updated = {
+                **link,
+                "deployment_id": record.deployment_id,
+                "deployment_status": record.status.value,
+                "deployment_environment": record.environment,
+                "packaged_at": _now(),
+            }
+            link_path = self.out_dir / "factory-runs" / run.run_id / "control-plane.json"
+            link_path.write_text(json.dumps(updated, indent=2, sort_keys=False), encoding="utf-8")
+            return {"control_plane": updated, "deployment": record.to_dict(), "idempotent": False}
 
     def beta_state(self) -> dict[str, Any]:
         return self.private_beta().snapshot()
@@ -729,12 +897,18 @@ class CommandCenterService:
         return self.private_beta().jobs.retry(job_id.strip(), actor.strip()).to_dict()
 
     def beta_approve_deployment(self, deployment_id: str, actor: str, reason: str) -> dict[str, Any]:
+        if not deployment_id.strip() or not actor.strip() or not reason.strip():
+            raise ValueError("Deployment ID, approver, and reason are required.")
         return self.private_beta().deployments.approve(deployment_id.strip(), actor.strip(), reason.strip()).to_dict()
 
     def beta_promote_deployment(self, deployment_id: str, actor: str) -> dict[str, Any]:
+        if not deployment_id.strip() or not actor.strip():
+            raise ValueError("Deployment ID and actor are required.")
         return self.private_beta().deployments.promote(deployment_id.strip(), actor.strip()).to_dict()
 
     def beta_rollback_deployment(self, deployment_id: str, actor: str, reason: str) -> dict[str, Any]:
+        if not deployment_id.strip() or not actor.strip() or not reason.strip():
+            raise ValueError("Deployment ID, actor, and reason are required.")
         return self.private_beta().deployments.rollback(deployment_id.strip(), actor.strip(), reason.strip()).to_dict()
 
     def verify(self, sandbox: str | None = None) -> dict[str, Any]:

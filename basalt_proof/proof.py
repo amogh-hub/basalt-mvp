@@ -178,6 +178,7 @@ def verify_repo(
             sandbox_requested=sandbox_requested,
             sandbox_fallback_reason=executor.fallback_reason,
             project_type=config.project_type,
+            project_state_hash=graph.state_hash,
             checks=checks,
             security_findings=security_findings,
             mutations=mutations,

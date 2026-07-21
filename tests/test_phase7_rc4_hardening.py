@@ -261,7 +261,9 @@ class RC4BrowserApiContractTests(unittest.TestCase):
             self.assertIsNone(snapshot["commands"]["build"])
         root = Path(__file__).parents[1] / "basalt_proof" / "webui"
         workspace = (root / "workspace.js").read_text(encoding="utf-8")
-        self.assertIn('.filter((name) => Boolean(state.snapshot?.commands?.[name]))', workspace)
+        self.assertIn('Object.entries(state.snapshot?.commands || {})', workspace)
+        self.assertIn('command_metadata', workspace)
+        self.assertIn('if (tab?.dirty)', workspace)
 
     def test_evidence_vault_exposes_hash_schema_origin_and_mutability(self):
         with tempfile.TemporaryDirectory() as td:

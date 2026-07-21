@@ -194,3 +194,21 @@ button.artifact-item { width: 100%; color: inherit; text-align: left; font: inhe
 @media (max-width: 900px) { .architecture-grid, .operation-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .architecture-grid, .operation-grid, .compact-detail { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; } }
+
+/* RC4 acceptance-remediation: explicit scope, state, provenance, and responsive truth */
+.metric-card strong, .result-stat strong, .detail-card strong, .panel-chip { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+#preview-mode { font-size: clamp(15px, 2vw, 24px); line-height: 1.15; }
+.scope-disclosure, .state-banner { display: grid; gap: 5px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 11px; background: rgba(113,133,155,.06); color: var(--muted); font-size: 10px; line-height: 1.55; }
+.scope-disclosure strong, .state-banner strong { color: var(--text); font-size: 11px; }
+.state-banner { margin: 0 0 14px; }
+.state-banner.warning, .result-stat.warning { border-color: rgba(244,186,91,.38); background: rgba(244,186,91,.06); color: var(--warn); }
+.field-error { padding: 9px 11px; border: 1px solid rgba(255,111,111,.3); border-radius: 9px; background: rgba(255,111,111,.06); color: var(--bad); font-size: 10px; }
+.artifact-item > div { min-width: 0; }
+.artifact-item span { display: block; overflow-wrap: anywhere; }
+.artifact-provenance { margin-top: 5px; color: var(--accent) !important; line-height: 1.45; }
+.artifact-preview { scroll-margin-top: 22px; }
+.artifact-preview .dialog-actions { justify-content: flex-start; }
+.stack-item[open] { border-color: #3a444f; }
+.stack-item summary { cursor: pointer; }
+.evidence-layout { align-items: start; }
+@media (max-width: 900px) { .evidence-layout { grid-template-columns: 1fr; } .artifact-preview { position: static; } }

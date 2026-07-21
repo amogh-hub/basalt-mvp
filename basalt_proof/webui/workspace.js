@@ -127,11 +127,14 @@ function renderLineNumbers(content) {
 }
 
 function updateCursorPosition() {
+  const tabState = currentTab();
+  if (!tabState) { $("cursor-position").textContent = "No cursor"; return; }
   const code = $("code");
   const before = code.value.slice(0, code.selectionStart);
   const lines = before.split("\n");
   $("cursor-position").textContent = `Ln ${lines.length}, Col ${lines.at(-1).length + 1}`;
 }
+
 
 function syncEditorScroll() {
   const code = $("code");
@@ -232,45 +235,28 @@ function updateActionState() {
 
 function updateEditorForActiveTab() {
   const tabState = currentTab();
-  renderTabs();
-  markActiveTreePath();
+  renderTabs(); markActiveTreePath();
   if (!tabState) {
-    $("empty-editor").classList.remove("hidden");
-    $("editor-frame").classList.add("hidden");
-    $("breadcrumbs").textContent = "Select a file from the repository";
-    $("footer-path").textContent = "No file selected";
-    $("footer-language").textContent = "Plain Text";
-    $("diagnostics-label").textContent = "No file selected";
-    $("diagnostics-summary").disabled = true;
-    updateActionState();
-    return;
+    $("empty-editor").classList.remove("hidden"); $("editor-frame").classList.add("hidden");
+    $("breadcrumbs").textContent = "Select a file from the repository"; $("footer-path").textContent = "No file selected";
+    $("footer-language").textContent = "No document"; $("footer-encoding").textContent = "—"; $("cursor-position").textContent = "No cursor";
+    $("file-meta").textContent = "No document"; $("git-file-state").className = "file-truth hidden"; $("git-file-state").textContent = "";
+    $("diagnostics-label").textContent = "No file selected"; $("diagnostics-summary").disabled = true; updateActionState(); return;
   }
-  $("empty-editor").classList.add("hidden");
-  $("editor-frame").classList.remove("hidden");
-  $("code").disabled = false;
-  $("code").value = tabState.content;
-  $("breadcrumbs").textContent = tabState.path.split("/").join("  /  ");
-  $("footer-path").textContent = tabState.path;
-  $("footer-language").textContent = languageLabel(tabState.language);
-  $("file-meta").textContent = `${tabState.line_count || Math.max(1, tabState.content.split("\n").length)} lines · ${tabState.size_bytes} bytes · ${tabState.sha256.slice(0, 12)}`;
-  renderLineNumbers(tabState.content);
-  renderHighlight(tabState.content, tabState.language);
-  syncEditorScroll();
-  requestAnimationFrame(() => {
-    const code = $("code");
-    const max = code.value.length;
-    const start = Math.max(0, Math.min(Number(tabState.cursorStart || 0), max));
-    const end = Math.max(start, Math.min(Number(tabState.cursorEnd || start), max));
-    code.setSelectionRange(start, end);
-    code.scrollTop = Number(tabState.scrollTop || 0);
-    code.scrollLeft = Number(tabState.scrollLeft || 0);
-    syncEditorScroll();
-    updateCursorPosition();
-  });
-  renderDiagnosticsSummary(state.diagnostics.get(tabState.path));
-  updateCursorPosition();
-  updateActionState();
+  $("empty-editor").classList.add("hidden"); $("editor-frame").classList.remove("hidden"); $("code").disabled = false; $("code").value = tabState.content;
+  $("breadcrumbs").textContent = tabState.path.split("/").join("  /  "); $("footer-path").textContent = tabState.path;
+  $("footer-language").textContent = languageLabel(tabState.language); $("footer-encoding").textContent = "UTF-8";
+  $("file-meta").textContent = `${tabState.line_count ?? Math.max(1, tabState.content.split("\n").length)} lines · ${tabState.size_bytes} bytes · ${tabState.sha256.slice(0, 12)}`;
+  const gitTruth = tabState.git || {};
+  const gitNode = $("git-file-state");
+  if (gitTruth.ignored) { gitNode.className = "file-truth warning"; gitNode.textContent = `IGNORED BY GIT · changes will not be committed${gitTruth.rule ? ` · ${gitTruth.rule}` : ""}`; }
+  else if (gitTruth.tracked) { gitNode.className = "file-truth good"; gitNode.textContent = "Tracked by Git"; }
+  else { gitNode.className = "file-truth warning"; gitNode.textContent = "UNTRACKED BY GIT · save does not stage or commit this file"; }
+  renderLineNumbers(tabState.content); renderHighlight(tabState.content, tabState.language); syncEditorScroll();
+  requestAnimationFrame(() => { const code = $("code"); const max = code.value.length; const start = Math.max(0, Math.min(Number(tabState.cursorStart || 0), max)); const end = Math.max(start, Math.min(Number(tabState.cursorEnd || start), max)); code.setSelectionRange(start, end); code.scrollTop = Number(tabState.scrollTop || 0); code.scrollLeft = Number(tabState.scrollLeft || 0); syncEditorScroll(); updateCursorPosition(); });
+  renderDiagnosticsSummary(state.diagnostics.get(tabState.path)); updateActionState();
 }
+
 
 function activateTab(path) {
   if (!state.tabs.has(path)) return;
@@ -408,27 +394,26 @@ function renderDiagnosticsSummary(result) {
 }
 
 function showDiagnostics() {
-  const tabState = currentTab();
-  if (!tabState) return;
-  const result = state.diagnostics.get(tabState.path);
-  const root = $("diagnostics-list");
-  root.replaceChildren();
-  if (!result || !result.items.length) {
-    root.append(node("div", "clean-diagnostics", "No diagnostics for the current file."));
-  } else {
+  const tabState = currentTab(); if (!tabState) return;
+  const result = state.diagnostics.get(tabState.path); const root = $("diagnostics-list"); root.replaceChildren();
+  if (!result || !result.items.length) root.append(node("div", "clean-diagnostics", "No diagnostics for the current file."));
+  else {
     const list = node("div", "diagnostic-items");
     result.items.forEach((item) => {
-      const card = node("button", "diagnostic-item");
-      card.type = "button";
+      const card = node("button", "diagnostic-item"); card.type = "button";
       card.append(node("strong", "", `${item.severity} · ${item.code || "DIAGNOSTIC"}`));
-      card.append(node("p", "", `Line ${item.line}, column ${item.column} — ${item.message}`));
-      card.addEventListener("click", () => { $("diagnostics-dialog").close(); goToLocation(item.line, item.column, item.end_column); });
+      card.append(node("p", "", `Line ${item.line}, column ${item.column}${item.end_column ? `–${item.end_column}` : ""} — ${item.message}`));
+      card.addEventListener("click", () => {
+        const navigate = () => { activateTab(tabState.path); goToLocation(item.line, item.column, item.end_column); $("code").focus(); };
+        if ($("diagnostics-dialog").open) { $("diagnostics-dialog").addEventListener("close", () => requestAnimationFrame(navigate), { once: true }); $("diagnostics-dialog").close(); }
+        else requestAnimationFrame(navigate);
+      });
       list.append(card);
-    });
-    root.append(list);
+    }); root.append(list);
   }
   $("diagnostics-dialog").showModal();
 }
+
 
 async function reviewDiff() {
   const tabState = currentTab();
@@ -535,172 +520,84 @@ function switchPanel(name) {
 }
 
 async function runCommand(name) {
-  const terminal = $("terminal");
-  switchPanel("build");
-  terminal.textContent = `Running ${name}…`;
-  qsa("[data-command]").forEach((button) => { button.disabled = true; });
+  const terminal = $("terminal"); const metadata = state.snapshot?.command_metadata?.[name] || {};
+  switchPanel("build"); terminal.textContent = `Running ${metadata.display_name || name}…`; qsa("[data-command]").forEach((button) => { button.disabled = true; });
   try {
-    const result = await api("/api/v1/workspace/command", {
-      method: "POST",
-      action: true,
-      body: JSON.stringify({ name }),
-    });
-    terminal.textContent = `$ ${result.command}\n\n${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}\n\n[${result.status}] ${result.duration_ms}ms`;
-    terminal.scrollTop = terminal.scrollHeight;
-    toast(`${name} ${result.status.toLowerCase()} in ${result.duration_ms}ms`, result.status !== "PASS");
-    await Promise.all([loadActivity(), loadProof()]);
-  } catch (error) {
-    terminal.textContent = error.message;
-    toast(error.message, true);
-  } finally {
-    qsa("[data-command]").forEach((button) => {
-      button.disabled = !state.bootstrap.actions_enabled || !state.snapshot.commands?.[button.dataset.command];
-    });
-  }
+    const result = await api("/api/v1/workspace/command", { method: "POST", action: true, body: JSON.stringify({ name }) });
+    terminal.textContent = `Action: ${result.display_name || metadata.display_name || name}\nKind: ${result.kind || metadata.kind || "configured"}\nPurpose: ${result.purpose || metadata.purpose || "Configured command"}\nProof check: ${result.proof_check ? "yes" : "no"}\nRepository state: ${result.repository_state_hash || "unknown"}\n\n$ ${result.command}\n\n${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}\n\n[${result.status}] exit ${result.exit_code} · ${result.duration_ms}ms`;
+    terminal.scrollTop = terminal.scrollHeight; toast(`${result.display_name || name} ${result.status.toLowerCase()} in ${result.duration_ms}ms`, result.status !== "PASS"); await Promise.all([loadActivity(), loadProof(), loadGit()]);
+  } catch (error) { terminal.textContent = error.message; toast(error.message, true); }
+  finally { qsa("[data-command]").forEach((button) => { button.disabled = !state.bootstrap.actions_enabled || !state.snapshot.commands?.[button.dataset.command]; }); }
 }
+
 
 async function loadProof() {
   const root = $("proof-content");
   try {
-    const report = await api("/api/v1/proof");
-    root.className = "panel-scroll";
-    root.replaceChildren();
-    const score = Number(report.score || 0);
-    const status = report.final_status || "NOT_RUN";
-    const checks = Array.isArray(report.checks) ? report.checks : [];
-    const passed = checks.filter((item) => item.status === "PASS").length;
-    const failed = checks.filter((item) => item.status === "FAIL").length;
-    const skipped = checks.filter((item) => ["SKIP", "SKIPPED", "NOT_APPLICABLE"].includes(String(item.status || "").toUpperCase())).length;
-    const grid = node("div", "metric-grid");
-    [["Proof score", `${score}/100`], ["Applicable checks", `${passed}/${Math.max(0, checks.length - skipped)}`], ["Failed", failed], ["Skipped", skipped]].forEach(([label, value]) => {
-      const metric = node("div", "metric");
-      metric.append(node("span", "", label), node("strong", "", value));
-      grid.append(metric);
-    });
-    root.append(grid);
-    const badgeClass = status === "VERIFIED" ? "good" : (status === "NOT_RUN" ? "" : "warn");
-    root.append(node("div", `status-badge ${badgeClass}`, status));
-    if (checks.length) {
-      const list = node("div", "event-list");
-      checks.slice(0, 20).forEach((item) => {
-        const card = node("div", "event-item");
-        card.append(node("strong", "", `${item.name || item.id || "Check"} · ${item.status || "UNKNOWN"}`));
-        card.append(node("p", "", item.command || item.message || ""));
-        list.append(card);
-      });
-      root.append(list);
-    }
-  } catch (error) {
-    root.className = "panel-scroll empty-panel";
-    root.textContent = error.message;
-  }
+    const report = await api("/api/v1/proof"); root.className = "panel-scroll"; root.replaceChildren();
+    const score = Number(report.score || 0); const status = report.final_status || "NOT_RUN"; const checks = Array.isArray(report.checks) ? report.checks : [];
+    const canonical = (value) => ["SKIP", "SKIPPED", "NOT_APPLICABLE"].includes(String(value || "").toUpperCase()) ? "NOT_APPLICABLE" : String(value || "UNKNOWN").toUpperCase();
+    const passed = checks.filter((item) => canonical(item.status) === "PASS").length; const failed = checks.filter((item) => canonical(item.status) === "FAIL").length; const notApplicable = checks.filter((item) => canonical(item.status) === "NOT_APPLICABLE").length;
+    const grid = node("div", "metric-grid"); [["Proof score", `${score}/100`], ["Applicable checks", `${passed}/${Math.max(0, checks.length - notApplicable)}`], ["Failed", failed], ["Not applicable", notApplicable]].forEach(([label, value]) => { const metric = node("div", "metric"); metric.append(node("span", "", label), node("strong", "", value)); grid.append(metric); }); root.append(grid);
+    root.append(node("div", `status-badge ${status === "VERIFIED" ? "good" : (status === "NOT_RUN" ? "" : "warn")}`, status));
+    const provenance = node("div", "proof-provenance");
+    const proofState = report.project_state_hash || report.knowledge_graph?.state_hash || report.repository_state_hash || report.state_hash || "not recorded";
+    const workspaceState = state.snapshot?.repository_state_hash || "not recorded";
+    [["Proof project state", proofState], ["Current workspace fingerprint", workspaceState], ["Started", report.started_at ? new Date(report.started_at).toLocaleString() : "—"], ["Finished", report.finished_at ? new Date(report.finished_at).toLocaleString() : "—"], ["Sandbox", `${report.sandbox || "unknown"}${report.sandbox_fallback_reason ? ` · ${report.sandbox_fallback_reason}` : ""}`], ["Mutations", `${(report.mutations || []).filter((item) => item.survived === false).length} killed · ${(report.mutations || []).filter((item) => item.survived === true).length} survived`], ["Security", `${(report.security_findings || []).filter((item) => String(item.level).toUpperCase() === "HIGH").length} high findings`]].forEach(([label, value]) => { const row = node("div", "truth-row"); row.append(node("span", "", label), node("span", "", value)); provenance.append(row); });
+    const evidence = node("button", "button secondary proof-evidence-link", "Open complete evidence"); evidence.type = "button"; evidence.addEventListener("click", () => { window.location.href = "/#evidence"; }); provenance.append(evidence); root.append(provenance);
+    if (checks.length) { const list = node("div", "event-list"); checks.slice(0, 20).forEach((item) => { const card = node("div", "event-item"); const statusLabel = canonical(item.status); card.append(node("strong", "", `${item.name || item.id || "Check"} · ${statusLabel}`)); card.append(node("p", "", item.command || item.message || (statusLabel === "NOT_APPLICABLE" ? "No command configured; excluded from applicable checks." : ""))); list.append(card); }); root.append(list); }
+  } catch (error) { root.className = "panel-scroll empty-panel"; root.textContent = error.message; }
+}
+
+
+function showActivityDetail(item) {
+  $("activity-detail-title").textContent = `${item.event || "Workspace event"} · ${item.event_id || "unidentified"}`;
+  const root = $("activity-detail"); root.replaceChildren();
+  const fields = [["Event ID", item.event_id], ["Actor", item.actor || "system"], ["Path", item.path || "workspace"], ["Created", item.created_at ? new Date(item.created_at).toLocaleString() : "—"], ["Command", item.command || "—"], ["Status", item.status || "—"], ["Duration", item.duration_ms != null ? `${item.duration_ms} ms` : "—"], ["Exit code", item.exit_code ?? "—"], ["Repository state", item.repository_state_hash || "—"], ["Before SHA", item.before_sha256 || "—"], ["After SHA", item.after_sha256 || "—"], ["Git tracking", item.git_tracking ? JSON.stringify(item.git_tracking) : "—"], ["Detail", item.detail || "—"]];
+  fields.forEach(([label, value]) => { const card = node("div", "metric"); card.append(node("span", "", label), node("strong", "", value)); root.append(card); });
+  const output = $("activity-detail-output"); const raw = item.stdout || item.stderr || ""; output.textContent = raw; output.classList.toggle("hidden", !raw); $("activity-dialog").showModal();
 }
 
 async function loadActivity() {
   const root = $("activity-content");
   try {
-    const data = await api("/api/v1/workspace/events");
-    const items = [...(data.items || [])].reverse();
-    root.replaceChildren();
-    root.className = "panel-scroll";
-    if (!items.length) {
-      root.className = "panel-scroll empty-panel";
-      root.textContent = "No workspace activity recorded.";
-      return;
-    }
+    const data = await api("/api/v1/workspace/events"); const items = [...(data.items || [])].reverse(); root.replaceChildren(); root.className = "panel-scroll";
+    if (!items.length) { root.className = "panel-scroll empty-panel"; root.textContent = "No workspace activity recorded."; return; }
     const list = node("div", "event-list");
-    items.forEach((item) => {
-      const card = node("div", "event-item");
-      card.append(node("strong", "", item.event));
-      card.append(node("p", "", `${item.path || "workspace"} · ${item.actor || "system"}`));
-      card.append(node("p", "", `${item.detail || ""}${item.created_at ? ` · ${new Date(item.created_at).toLocaleString()}` : ""}`));
-      list.append(card);
-    });
-    root.append(list);
-  } catch (error) {
-    root.className = "panel-scroll empty-panel";
-    root.textContent = error.message;
-  }
+    items.forEach((item) => { const card = node("button", "event-item event-button"); card.type = "button"; card.append(node("strong", "", item.event)); card.append(node("p", "", `${item.path || "workspace"} · ${item.actor || "system"}`)); card.append(node("p", "", `${item.status || ""}${item.duration_ms != null ? ` ${item.duration_ms}ms` : ""}${item.created_at ? ` · ${new Date(item.created_at).toLocaleString()}` : ""}`)); card.addEventListener("click", () => showActivityDetail(item)); list.append(card); }); root.append(list);
+  } catch (error) { root.className = "panel-scroll empty-panel"; root.textContent = error.message; }
 }
+
 
 async function loadGit() {
   const root = $("git-content");
   try {
-    const git = await api("/api/v1/workspace/git");
-    root.replaceChildren();
-    root.className = "panel-scroll";
-    if (!git.available) {
-      $("branch-chip").textContent = "Git unavailable";
-      root.className = "panel-scroll empty-panel";
-      root.textContent = git.reason || "Git is unavailable.";
-      return;
-    }
+    const git = await api("/api/v1/workspace/git"); root.replaceChildren(); root.className = "panel-scroll";
+    if (!git.available) { $("branch-chip").textContent = "Git unavailable"; root.className = "panel-scroll empty-panel"; root.textContent = git.reason || "Git is unavailable."; return; }
     $("branch-chip").textContent = `${git.branch}${git.dirty ? ` · ${git.items.length} changed` : " · clean"}`;
-    const grid = node("div", "metric-grid");
-    [["Branch", git.branch], ["Commit", git.commit], ["Ahead", git.ahead], ["Behind", git.behind], ["Staged", git.summary?.staged || 0], ["Untracked", git.summary?.untracked || 0]].forEach(([label, value]) => {
-      const metric = node("div", "metric"); metric.append(node("span", "", label), node("strong", "", value)); grid.append(metric);
-    });
-    root.append(grid);
-    const badge = node("div", `status-badge ${git.dirty ? "warn" : "good"}`, git.dirty ? "WORKTREE MODIFIED" : "WORKTREE CLEAN");
-    root.append(badge);
-    root.append(node("p", "git-truth", `Read-only Git inspection · upstream ${git.upstream || "not configured"} · commit/push disabled`));
+    const ahead = git.ahead_behind_available ? git.ahead : "N/A"; const behind = git.ahead_behind_available ? git.behind : "N/A";
+    const grid = node("div", "metric-grid"); [["Branch", git.branch], ["Commit", git.commit], ["Ahead", ahead], ["Behind", behind], ["Staged", git.summary?.staged || 0], ["Untracked", git.summary?.untracked || 0]].forEach(([label, value]) => { const metric = node("div", "metric"); metric.append(node("span", "", label), node("strong", "", value)); grid.append(metric); }); root.append(grid);
+    root.append(node("div", `status-badge ${git.dirty ? "warn" : "good"}`, git.dirty ? "WORKTREE MODIFIED" : "WORKTREE CLEAN"));
+    root.append(node("p", "git-truth", `Read-only Git inspection · upstream ${git.upstream || "not configured; ahead/behind unavailable"} · commit/push disabled`));
     const diffOutput = node("pre", "git-diff-output", "Select a changed file to inspect its diff.");
-    if (git.items.length) {
-      const list = node("div", "git-list");
-      git.items.forEach((item) => {
-        const card = node("button", "git-item");
-        card.type = "button";
-        const scope = item.untracked ? "untracked" : [item.staged ? "staged" : "", item.unstaged ? "unstaged" : ""].filter(Boolean).join(" + ");
-        card.append(node("strong", "", `${item.status}  ${item.path}`));
-        card.append(node("p", "", scope || "changed"));
-        card.addEventListener("click", async () => {
-          try {
-            const staged = item.staged && !item.unstaged;
-            const data = await api(`/api/v1/workspace/git/diff?path=${encodeURIComponent(item.path)}&staged=${staged}`);
-            diffOutput.textContent = data.diff || "No diff available.";
-          } catch (error) {
-            diffOutput.textContent = error.message;
-          }
-        });
-        list.append(card);
-      });
-      root.append(list);
-    }
+    if (git.items.length) { const list = node("div", "git-list"); git.items.forEach((item) => { const card = node("button", "git-item"); card.type = "button"; const scope = item.untracked ? "untracked" : [item.staged ? "staged" : "", item.unstaged ? "unstaged" : ""].filter(Boolean).join(" + "); card.append(node("strong", "", `${item.status}  ${item.path}`), node("p", "", scope || "changed")); card.addEventListener("click", async () => { try { const staged = item.staged && !item.unstaged; const data = await api(`/api/v1/workspace/git/diff?path=${encodeURIComponent(item.path)}&staged=${staged}`); diffOutput.textContent = data.diff || "No diff available."; } catch (error) { diffOutput.textContent = error.message; } }); list.append(card); }); root.append(list); }
     root.append(diffOutput);
-    if (git.commits?.length) {
-      const heading = node("h3", "git-history-title", "Recent commits");
-      const history = node("div", "event-list");
-      git.commits.forEach((item) => {
-        const card = node("div", "event-item");
-        card.append(node("strong", "", `${item.commit} · ${item.subject}`));
-        card.append(node("p", "", `${item.author} · ${new Date(item.created_at).toLocaleString()}`));
-        history.append(card);
-      });
-      root.append(heading, history);
-    }
-  } catch (error) {
-    root.className = "panel-scroll empty-panel";
-    root.textContent = error.message;
-  }
+    if (git.commits?.length) { const heading = node("h3", "git-history-title", "Recent commits"); const history = node("div", "event-list"); git.commits.forEach((item) => { const card = node("div", "event-item"); card.append(node("strong", "", `${item.commit} · ${item.subject}`), node("p", "", `${item.author} · ${new Date(item.created_at).toLocaleString()}`)); history.append(card); }); root.append(heading, history); }
+  } catch (error) { root.className = "panel-scroll empty-panel"; root.textContent = error.message; }
 }
 
+
 function paletteCommands() {
-  const commands = [
-    { icon: "S", title: "Review diff and save current file", detail: "⌘S", action: reviewDiff },
-    { icon: "R", title: "Reload current file", detail: "Repository version", action: reloadActive },
-    ...["test", "lint", "build", "typecheck", "install"]
-      .filter((name) => Boolean(state.snapshot?.commands?.[name]))
-      .map((name) => ({ icon: name[0].toUpperCase(), title: `Run ${name} command`, detail: state.snapshot.commands[name], action: () => runCommand(name) })),
-    { icon: "P", title: "Show Proof panel", detail: "Engineering panel", action: () => switchPanel("proof") },
-    { icon: "A", title: "Show Activity panel", detail: "Engineering panel", action: () => switchPanel("activity") },
-    { icon: "G", title: "Show Git panel", detail: "Engineering panel", action: () => switchPanel("git") },
-    { icon: "↻", title: "Refresh repository explorer", detail: "Workspace", action: loadTree },
-  ];
-  const files = state.flatFiles.map((item) => ({
-    icon: fileIcon(item.path), title: item.path, detail: languageLabel(item.language), action: () => openFile(item.path),
-  }));
-  return [...commands, ...files];
+  const tab = currentTab(); const commands = [];
+  if (tab?.dirty) commands.push({ icon: "S", title: "Review diff and save current file", detail: "⌘S · governed atomic save", action: reviewDiff });
+  if (tab) commands.push({ icon: "R", title: "Reload current file", detail: "Repository version", action: reloadActive });
+  Object.entries(state.snapshot?.commands || {}).filter(([, command]) => Boolean(command)).forEach(([name, command]) => {
+    const metadata = state.snapshot?.command_metadata?.[name] || {}; commands.push({ icon: name[0].toUpperCase(), title: `Run ${metadata.display_name || name}`, detail: `${metadata.purpose || "Configured command"} · ${command}`, action: () => runCommand(name) });
+  });
+  commands.push({ icon: "P", title: "Show Proof panel", detail: "Engineering panel", action: () => switchPanel("proof") }, { icon: "A", title: "Show Activity panel", detail: "Engineering panel", action: () => switchPanel("activity") }, { icon: "G", title: "Show Git panel", detail: "Engineering panel", action: () => switchPanel("git") }, { icon: "↻", title: "Refresh repository explorer", detail: "Workspace", action: loadTree });
+  const files = state.flatFiles.map((item) => ({ icon: fileIcon(item.path), title: item.path, detail: languageLabel(item.language), action: () => openFile(item.path) })); return [...commands, ...files];
 }
+
 
 function renderPalette() {
   const term = $("palette-input").value.trim().toLowerCase();
@@ -955,8 +852,9 @@ async function initialize() {
     const row = node("div", "truth-row"); row.append(node("span", "", label), node("span", "", value)); $("truth").append(row);
   });
   qsa("[data-command]").forEach((button) => {
-    button.disabled = !state.bootstrap.actions_enabled || !state.snapshot.commands?.[button.dataset.command];
-    button.title = state.snapshot.commands?.[button.dataset.command] || `No ${button.dataset.command} command configured`;
+    const name = button.dataset.command; const command = state.snapshot.commands?.[name]; const metadata = state.snapshot.command_metadata?.[name] || {};
+    button.disabled = !state.bootstrap.actions_enabled || !command; button.textContent = metadata.display_name || name[0].toUpperCase() + name.slice(1);
+    button.title = command ? `${metadata.purpose || "Configured command"}: ${command}` : `No ${name} command configured`;
   });
   await Promise.all([loadTree(), loadGit(), loadProof(), loadActivity()]);
   await restoreWorkspaceState();

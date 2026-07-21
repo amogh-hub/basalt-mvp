@@ -4,7 +4,7 @@ project:
 commands:
   install: null
   build: null
-  lint: python -m compileall basalt_proof tests
+  lint: python -m basalt_proof.quality_check basalt_proof tests
   typecheck: null
   test: python tests/run_proof_matrix.py
 proof:

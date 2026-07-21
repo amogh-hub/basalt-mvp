@@ -111,7 +111,7 @@
               <label>Constraints, one per line<textarea id="factory-constraints" rows="3" placeholder="No production secrets
 Local verification only"></textarea></label>
               <label>Privacy mode<select id="factory-privacy"><option value="local">Local</option><option value="private">Private</option><option value="standard">Standard</option></select></label>
-              <button class="button primary" type="submit">Create governed plan</button>
+              <div class="scope-disclosure"><strong>Planned output boundary</strong><span>Planning writes only governed state and evidence under <code>.basalt/factory-runs</code>. Build output is assembled outside the source repository and never deployed automatically.</span></div><div id="factory-form-error" class="field-error hidden" role="alert"></div><button class="button primary" type="submit">Create governed plan</button>
             </form>
           </article>
           <article class="panel">
@@ -128,14 +128,14 @@ Local verification only"></textarea></label>
 
       <section id="plan" class="view" aria-labelledby="plan-title">
         <div class="section-heading"><div><p class="eyebrow">PREVENTION-FIRST ENGINEERING</p><h2 id="plan-title">Dependency-safe execution plan</h2></div><span id="factory-state-version" class="mono-chip">state 0</span></div>
-        <div id="epoch-grid" class="epoch-grid"></div>
-        <article class="panel"><div class="panel-heading"><div><p class="eyebrow">TASK GRAPH</p><h3>Specialist assignments</h3></div></div><div class="table-wrap"><table><thead><tr><th>Task</th><th>Epoch</th><th>Agent</th><th>Risk</th><th>Status</th></tr></thead><tbody id="factory-task-table"></tbody></table></div></article>
+        <div id="plan-run-state" class="state-banner hidden"></div><div id="epoch-grid" class="epoch-grid"></div>
+        <article class="panel"><div class="panel-heading"><div><p class="eyebrow">TASK GRAPH</p><h3>Specialist assignments</h3></div></div><div class="table-wrap"><table><thead><tr><th>Task</th><th>Epoch</th><th>Execution route</th><th>Depends on</th><th>Expected output</th><th>Risk</th><th>Status</th></tr></thead><tbody id="factory-task-table"></tbody></table></div></article>
       </section>
 
       <section id="agents" class="view" aria-labelledby="agents-title">
-        <div class="section-heading"><div><p class="eyebrow">GOVERNED ORCHESTRATION</p><h2 id="agents-title">Specialist agents and model routing</h2><p class="muted">Agents operate within capability scopes. Models are routed by task, privacy, cost, and review diversity.</p></div></div>
+        <div class="section-heading"><div><p class="eyebrow">GOVERNED ORCHESTRATION</p><h2 id="agents-title">Specialist execution and accountable routing</h2><p class="muted">Deterministic engines and optional model providers are distinct. Every task exposes its capability scope, privacy route, dependencies, artifacts, and review path.</p></div></div>
         <div class="two-column">
-          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">MODEL INVENTORY</p><h3>Available routing profiles</h3></div></div><div id="model-inventory" class="stack-list empty-state">No model profiles loaded.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">EXECUTION PROFILES</p><h3>Deterministic engines and model routes</h3></div></div><div id="model-inventory" class="stack-list empty-state">No model profiles loaded.</div></article>
           <article class="panel"><div class="panel-heading"><div><p class="eyebrow">AGENT EXECUTION</p><h3>Latest accountable work</h3></div></div><div id="agent-execution-list" class="stack-list empty-state">Select a factory run to inspect agent work.</div></article>
         </div>
       </section>
@@ -192,7 +192,7 @@ Local verification only"></textarea></label>
             <form id="impact-form" class="tool-form">
               <label>File, symbol, route or feature<input id="impact-target" required placeholder="basalt_proof/agent_runtime.py"></label>
               <label>Depth<input id="impact-depth" type="number" min="0" max="8" value="3"></label>
-              <button class="button primary" type="submit">Analyze impact</button>
+              <div id="impact-error" class="field-error hidden" role="alert"></div><button class="button primary" type="submit">Analyze impact</button>
             </form>
             <div id="impact-result" class="result-box empty-state">Run an impact analysis to see downstream risk.</div>
           </article>
@@ -203,7 +203,7 @@ Local verification only"></textarea></label>
               <label>Agent role<select id="context-role"><option>CodeReviewAgent</option><option>TestingAgent</option><option>SecurityAgent</option><option>ImplementationAgent</option></select></label>
               <label>Targets, comma separated<input id="context-targets" placeholder="basalt_proof/agent_runtime.py"></label>
               <label>Token budget<input id="context-budget" type="number" min="500" max="100000" value="4000"></label>
-              <button class="button primary" type="submit">Compile context</button>
+              <div id="context-error" class="field-error hidden" role="alert"></div><button class="button primary" type="submit">Compile context</button>
             </form>
             <div id="context-result" class="result-box empty-state">Compile a focused, role-aware context pack.</div>
           </article>
@@ -276,7 +276,7 @@ Local verification only"></textarea></label>
         <div class="section-heading"><div><p class="eyebrow">AUDITABLE OUTPUT</p><h2 id="evidence-title">Evidence vault</h2></div><span id="artifact-count" class="panel-chip">0 artifacts</span></div>
         <div class="two-column evidence-layout">
           <article class="panel"><div id="artifact-list" class="artifact-list empty-state">No artifacts generated yet.</div></article>
-          <article class="panel artifact-preview"><div class="panel-heading"><div><p class="eyebrow">PREVIEW</p><h3 id="artifact-preview-title">Select an artifact</h3></div></div><pre id="artifact-preview">Evidence content will appear here.</pre></article>
+          <article id="artifact-preview-panel" class="panel artifact-preview"><div class="panel-heading"><div><p class="eyebrow">PREVIEW</p><h3 id="artifact-preview-title">Select an artifact</h3><p id="artifact-preview-status" class="muted">Evidence content will appear here.</p></div></div><pre id="artifact-preview">Evidence content will appear here.</pre><div class="dialog-actions"><button id="artifact-load-more" class="button secondary hidden" type="button">Load next chunk</button><button id="artifact-copy" class="button secondary hidden" type="button">Copy visible evidence</button></div></article>
         </div>
       </section>
     </main>

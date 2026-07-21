@@ -213,18 +213,27 @@ def compile_context_pack(
 
     selected_files: list[dict[str, Any]] = []
     selected_symbols: list[dict[str, Any]] = []
+    omitted_candidates: list[dict[str, Any]] = []
     estimated_tokens = 0
     per_file_cap = max(600, min(6000, token_budget // 3))
 
     for file_path, score in sorted(file_scores.items(), key=lambda item: (-item[1], item[0])):
         if estimated_tokens >= token_budget:
-            break
+            omitted_candidates.append({"path": file_path, "score": round(score, 3), "reason": "token budget exhausted"})
+            continue
         symbols = [item for item in graph.symbols if item.file == file_path]
         ranges = [(max(1, item.line - 3), max(item.line + 8, item.end_line + 2)) for item in symbols[:10]]
         remaining_chars = max(0, (token_budget - estimated_tokens) * 4)
         snippet = _read_snippet(repo_path / file_path, ranges, min(per_file_cap * 4, remaining_chars))
         snippet_tokens = _estimate_tokens(snippet)
-        if not snippet or estimated_tokens + snippet_tokens > token_budget:
+        if not snippet:
+            omitted_candidates.append({"path": file_path, "score": round(score, 3), "reason": "no readable snippet"})
+            continue
+        if estimated_tokens + snippet_tokens > token_budget:
+            omitted_candidates.append({
+                "path": file_path, "score": round(score, 3),
+                "reason": "token budget would be exceeded", "estimated_tokens": snippet_tokens,
+            })
             continue
         file_node = f"file:{file_path}"
         selected_files.append(
@@ -286,8 +295,23 @@ def compile_context_pack(
         {"entity": entity, "score": round(scores[entity], 3), "reasons": sorted(reasons.get(entity, set()))}
         for entity in sorted(scores, key=lambda item: (-scores[item], item))[:100]
     ]
-    total_candidates = max(1, len(graph.files))
+    total_candidates = max(1, len(file_scores) or len(graph.files))
     precision = round(min(1.0, len(selected_files) / total_candidates), 4)
+    saturation = estimated_tokens / max(1, token_budget)
+    budget_status = "SATURATED" if saturation >= 0.98 else ("NEAR_LIMIT" if saturation >= 0.8 else "AVAILABLE")
+    token_allocation = [
+        {"path": item["path"], "estimated_tokens": item.get("estimated_tokens", 0), "score": item.get("score", 0)}
+        for item in selected_files
+    ]
+    precision_explanation = (
+        f"Selected {len(selected_files)} of {total_candidates} scored file candidates "
+        f"({precision:.2%}). This is a deterministic selection ratio, not a claim of model accuracy."
+    )
+    manifest_payload = {
+        "state_hash": graph.state_hash, "task": task, "role": agent_role, "targets": targets,
+        "budget": token_budget, "selected": token_allocation, "omitted": omitted_candidates,
+    }
+    manifest_hash = hashlib.sha256(json.dumps(manifest_payload, sort_keys=True).encode("utf-8")).hexdigest()
     identity = hashlib.sha256(
         f"{graph.state_hash}|{task}|{agent_role}|{','.join(targets)}|{token_budget}".encode("utf-8")
     ).hexdigest()[:16]
@@ -316,7 +340,13 @@ def compile_context_pack(
             "built_at": graph.built_at,
         },
         selection_reasons=selection_reasons,
+        omitted_candidates=omitted_candidates[:100],
+        token_allocation=token_allocation,
+        budget_status=budget_status,
+        truncated=bool(omitted_candidates),
         context_precision_score=precision,
+        context_precision_explanation=precision_explanation,
+        manifest_hash=manifest_hash,
     )
 
 
@@ -356,6 +386,10 @@ def write_context_pack(pack: ContextPack, output_dir: Path) -> list[Path]:
         f"- Token budget: `{pack.token_budget}`",
         f"- Estimated tokens: `{pack.estimated_tokens}`",
         f"- Context precision score: `{pack.context_precision_score:.4f}`",
+        f"- Precision meaning: {pack.context_precision_explanation}",
+        f"- Budget status: `{pack.budget_status}`",
+        f"- Truncated/omitted: `{pack.truncated}`",
+        f"- Manifest hash: `{pack.manifest_hash}`",
         "",
         "## Task",
         "",
@@ -369,7 +403,12 @@ def write_context_pack(pack: ContextPack, output_dir: Path) -> list[Path]:
         if item.get("reasons"):
             lines.append("Reasons: " + "; ".join(item["reasons"]))
         lines.extend(["", "```text", item.get("snippet", ""), "```", ""])
-    lines.extend(["## Tests", ""])
+    lines.extend(["## Omitted Candidates", ""])
+    if pack.omitted_candidates:
+        lines.extend(f"- `{item.get('path')}` — {item.get('reason')}" for item in pack.omitted_candidates)
+    else:
+        lines.append("- None")
+    lines.extend(["", "## Tests", ""])
     lines.extend(f"- `{item}`" for item in pack.tests) or lines.append("- None")
     lines.extend(["", "## Features", ""])
     lines.extend(f"- {item}" for item in pack.features) or lines.append("- None")

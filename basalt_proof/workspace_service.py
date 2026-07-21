@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,11 +57,52 @@ def _language(path: Path) -> str:
 
 @dataclass(frozen=True)
 class WorkspaceEvent:
+    event_id: str
     event: str
     path: str
     actor: str
     detail: str
     created_at: str
+    command: str = ""
+    status: str = ""
+    duration_ms: int | None = None
+    exit_code: int | None = None
+    repository_state_hash: str = ""
+    before_sha256: str = ""
+    after_sha256: str = ""
+    git_tracking: dict[str, Any] | None = None
+
+
+def _canonical_line_count(content: str) -> int:
+    return max(1, content.count("\n") + 1)
+
+
+def _command_semantics(name: str, command: str | None, explicit: bool) -> dict[str, Any]:
+    raw = str(command or "")
+    lowered = raw.lower()
+    kind = name
+    label = name.capitalize()
+    purpose = "Configured proof command" if explicit else "Inferred workspace utility"
+    if name == "lint" and "compileall" in lowered:
+        kind = "syntax"
+        label = "Syntax check"
+        purpose = "Python compilation/syntax validation; not a full linter"
+    elif name == "lint":
+        label = "Lint"
+        purpose = "Static code-quality analysis"
+    elif name == "install" and not explicit:
+        label = "Workspace setup"
+        purpose = "Inferred local dependency setup; not part of the current proof report"
+    return {
+        "name": name,
+        "kind": kind,
+        "label": label,
+        "command": command,
+        "configured": bool(command),
+        "explicit": explicit,
+        "proof_check": explicit,
+        "purpose": purpose,
+    }
 
 
 class BuildWorkspaceService:
@@ -95,8 +137,65 @@ class BuildWorkspaceService:
             raise FileNotFoundError(str(candidate))
         return candidate
 
-    def _record(self, event: str, path: str, actor: str = '', detail: str = '') -> None:
-        item = WorkspaceEvent(event, path, actor[:200], detail[:1000], _now())
+    def _repository_state_hash(self) -> str:
+        try:
+            root = self._git_run('rev-parse', '--show-toplevel')
+            if root.returncode == 0:
+                head = self._git_run('rev-parse', 'HEAD').stdout.strip()
+                status = self._git_run('status', '--porcelain=v1', '--untracked-files=all').stdout
+                diff = self._git_run('diff', '--no-ext-diff', '--binary').stdout
+                staged = self._git_run('diff', '--cached', '--no-ext-diff', '--binary').stdout
+                return _sha256_bytes(f'{head}\0{status}\0{diff}\0{staged}'.encode('utf-8'))
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        return ''
+
+    def _git_file_truth(self, relative: str) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            'available': False, 'tracked': False, 'ignored': False, 'untracked': False,
+            'rule': '', 'summary': 'Git unavailable',
+        }
+        try:
+            root = self._git_run('rev-parse', '--show-toplevel')
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return result
+        if root.returncode != 0:
+            return result
+        result['available'] = True
+        tracked = self._git_run('ls-files', '--error-unmatch', '--', relative)
+        if tracked.returncode == 0:
+            result.update({'tracked': True, 'summary': 'Tracked by Git'})
+            return result
+        ignored = self._git_run('check-ignore', '-v', '--', relative)
+        if ignored.returncode == 0 and ignored.stdout.strip():
+            line = ignored.stdout.strip().splitlines()[0]
+            source, _, matched = line.partition('\t')
+            result.update({'ignored': True, 'rule': source, 'summary': f'Ignored by Git · {source}'})
+            return result
+        target = self.repo / relative
+        if target.exists():
+            result.update({'untracked': True, 'summary': 'Untracked by Git'})
+        else:
+            result['summary'] = 'Not tracked by Git'
+        return result
+
+    def _record(self, event: str, path: str, actor: str = '', detail: str = '', **metadata: Any) -> None:
+        item = WorkspaceEvent(
+            event_id=f'evt_{uuid.uuid4().hex[:20]}',
+            event=event,
+            path=path,
+            actor=actor[:200] or 'system',
+            detail=detail[:1000],
+            created_at=_now(),
+            command=str(metadata.get('command') or '')[:4000],
+            status=str(metadata.get('status') or '')[:80],
+            duration_ms=metadata.get('duration_ms'),
+            exit_code=metadata.get('exit_code'),
+            repository_state_hash=str(metadata.get('repository_state_hash') or self._repository_state_hash()),
+            before_sha256=str(metadata.get('before_sha256') or ''),
+            after_sha256=str(metadata.get('after_sha256') or ''),
+            git_tracking=metadata.get('git_tracking'),
+        )
         with self.events_path.open('a', encoding='utf-8') as handle:
             handle.write(json.dumps(asdict(item), sort_keys=True) + '\n')
 
@@ -105,9 +204,13 @@ class BuildWorkspaceService:
         config = load_config(self.repo)
         inferred = infer_commands(self.repo, project_type)
         commands: dict[str, str | None] = {}
+        command_metadata: dict[str, dict[str, Any]] = {}
         for name in ('install', 'build', 'lint', 'typecheck', 'test'):
             spec = getattr(config, name, None)
-            commands[name] = getattr(spec, 'command', None) or inferred.get(name)
+            explicit_command = getattr(spec, 'command', None)
+            command = explicit_command or inferred.get(name)
+            commands[name] = command
+            command_metadata[name] = _command_semantics(name, command, bool(explicit_command))
         return {
             'product': WORKSPACE_NAME,
             'version': __version__,
@@ -115,7 +218,9 @@ class BuildWorkspaceService:
             'repo': str(self.repo),
             'name': config.project_name or self.repo.name,
             'project_type': project_type,
+            'repository_state_hash': self._repository_state_hash(),
             'commands': commands,
+            'command_metadata': command_metadata,
             'capabilities': {
                 'file_explorer': True,
                 'multi_file_tabs': True,
@@ -193,7 +298,8 @@ class BuildWorkspaceService:
             'size_bytes': len(raw),
             'modified_ns': target.stat().st_mtime_ns,
             'language': _language(target),
-            'line_count': max(1, len(content.splitlines()) or 1),
+            'line_count': _canonical_line_count(content),
+            'git': self._git_file_truth(target.relative_to(self.repo).as_posix()),
         }
 
     def diff_file(self, path: str, content: str, expected_sha256: str = '') -> dict[str, Any]:
@@ -245,6 +351,7 @@ class BuildWorkspaceService:
                 'line': max(1, int(line or 1)),
                 'column': max(1, int(column or 1)),
                 'code': code,
+                'end_column': max(1, int(column or 1)),
             })
 
         if language == 'python':
@@ -302,7 +409,12 @@ class BuildWorkspaceService:
         temp.write_bytes(encoded)
         os.replace(temp, target)
         new_hash = _sha256_bytes(encoded)
-        self._record('FILE_SAVED', target.relative_to(self.repo).as_posix(), actor, f'{current_hash[:12]}->{new_hash[:12]}')
+        relative = target.relative_to(self.repo).as_posix()
+        tracking = self._git_file_truth(relative)
+        self._record(
+            'FILE_SAVED', relative, actor, f'{current_hash[:12]}->{new_hash[:12]}',
+            before_sha256=current_hash, after_sha256=new_hash, git_tracking=tracking,
+        )
         return self.read_file(path)
 
     def create_file(self, path: str, content: str = '', actor: str = '') -> dict[str, Any]:
@@ -381,13 +493,15 @@ class BuildWorkspaceService:
         commit = commit_result.stdout.strip() if commit_result.returncode == 0 else ''
         upstream = upstream_result.stdout.strip() if upstream_result.returncode == 0 else ''
         items: list[dict[str, Any]] = []
-        ahead = behind = 0
+        ahead: int | None = None
+        behind: int | None = None
         for index, line in enumerate(status_result.stdout.splitlines()):
             if index == 0 and line.startswith('##'):
                 ahead_match = re.search(r'ahead (\d+)', line)
                 behind_match = re.search(r'behind (\d+)', line)
-                ahead = int(ahead_match.group(1)) if ahead_match else 0
-                behind = int(behind_match.group(1)) if behind_match else 0
+                if upstream:
+                    ahead = int(ahead_match.group(1)) if ahead_match else 0
+                    behind = int(behind_match.group(1)) if behind_match else 0
                 continue
             if len(line) < 3:
                 continue
@@ -422,6 +536,7 @@ class BuildWorkspaceService:
             'dirty': bool(items),
             'ahead': ahead,
             'behind': behind,
+            'ahead_behind_available': bool(upstream),
             'summary': {
                 'staged': sum(1 for item in items if item['staged']),
                 'unstaged': sum(1 for item in items if item['unstaged']),
@@ -499,8 +614,14 @@ class BuildWorkspaceService:
             stdout = (exc.stdout or '')[-40000:] if isinstance(exc.stdout, str) else ''
             stderr = (exc.stderr or '')[-40000:] if isinstance(exc.stderr, str) else ''
         duration_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
+        explicit = bool(getattr(spec, 'command', None))
+        semantics = _command_semantics(selected, command, explicit)
         result = {
             'name': selected,
+            'display_name': semantics['label'],
+            'kind': semantics['kind'],
+            'purpose': semantics['purpose'],
+            'proof_check': semantics['proof_check'],
             'command': command,
             'status': status,
             'exit_code': returncode,
@@ -508,10 +629,15 @@ class BuildWorkspaceService:
             'stdout': stdout,
             'stderr': stderr,
             'created_at': _now(),
+            'repository_state_hash': self._repository_state_hash(),
         }
         output = self.state_root / f'command-{selected}.json'
         output.write_text(json.dumps(result, indent=2), encoding='utf-8')
-        self._record('COMMAND_RUN', selected, '', f'{status} {duration_ms}ms')
+        self._record(
+            'COMMAND_RUN', selected, 'system', f'{status} {duration_ms}ms',
+            command=command, status=status, duration_ms=duration_ms, exit_code=returncode,
+            repository_state_hash=result['repository_state_hash'],
+        )
         return result
 
     def events(self, limit: int = 100) -> list[dict[str, Any]]:
@@ -520,7 +646,19 @@ class BuildWorkspaceService:
         rows = []
         for line in self.events_path.read_text(encoding='utf-8').splitlines():
             try:
-                rows.append(json.loads(line))
+                item = json.loads(line)
+                if not item.get('event_id'):
+                    stable = hashlib.sha256(line.encode('utf-8')).hexdigest()[:20]
+                    item['event_id'] = f'evt_{stable}'
+                item.setdefault('command', '')
+                item.setdefault('status', '')
+                item.setdefault('duration_ms', None)
+                item.setdefault('exit_code', None)
+                item.setdefault('repository_state_hash', '')
+                item.setdefault('before_sha256', '')
+                item.setdefault('after_sha256', '')
+                item.setdefault('git_tracking', None)
+                rows.append(item)
             except json.JSONDecodeError:
                 continue
         return rows[-max(1, min(int(limit), 500)):]
